@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Influence Genogram</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; display: flex; height: 100vh; background: #f5f5f5; color: #333; }
+
+  #sidebar {
+    width: 340px; min-width: 340px; background: #fff; border-right: 1px solid #ddd;
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  #sidebar h1 { font-size: 18px; padding: 16px; border-bottom: 1px solid #eee; background: #fafafa; }
+
+  .section { padding: 14px 16px; border-bottom: 1px solid #eee; }
+  .section-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    color: #999; margin-bottom: 10px;
+  }
+
+  label { display: block; font-size: 12px; font-weight: 600; margin: 8px 0 3px; color: #555; }
+  label:first-of-type { margin-top: 0; }
+  input, select, textarea {
+    width: 100%; padding: 7px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;
+  }
+  textarea { resize: vertical; min-height: 50px; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+
+  .btn {
+    display: inline-block; padding: 7px 14px; border: none; border-radius: 4px;
+    font-size: 12px; font-weight: 500; cursor: pointer; transition: background .2s;
+  }
+  .btn-primary { background: #4a90d9; color: #fff; }
+  .btn-primary:hover { background: #3a7bc8; }
+  .btn-danger { background: #e74c3c; color: #fff; }
+  .btn-danger:hover { background: #c0392b; }
+  .btn-secondary { background: #eee; color: #333; }
+  .btn-secondary:hover { background: #ddd; }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+  .btn-group { display: flex; gap: 6px; margin-top: 10px; }
+
+  .item-list { margin-top: 8px; }
+  .item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 8px; border: 1px solid #eee; border-radius: 4px; margin-bottom: 3px;
+    cursor: pointer; font-size: 13px; transition: background .12s;
+  }
+  .item:hover { background: #f0f7ff; }
+  .item.selected { background: #e3f0ff; border-color: #4a90d9; }
+  .badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 8px; background: #eee; color: #666;
+    white-space: nowrap;
+  }
+  .conn-badge { font-size: 10px; padding: 2px 6px; border-radius: 8px; color: #fff; }
+
+  #main { flex: 1; display: flex; flex-direction: column; position: relative; }
+  #toolbar {
+    display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+    background: #fff; border-bottom: 1px solid #ddd;
+  }
+  #toolbar button { padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; background: #fff; cursor: pointer; font-size: 12px; }
+  #toolbar button:hover { background: #f0f0f0; }
+  #svg-container { flex: 1; overflow: auto; position: relative; }
+  #genogram-svg { width: 100%; height: 100%; }
+
+  #legend {
+    position: absolute; bottom: 16px; right: 16px; background: rgba(255,255,255,0.95);
+    border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-size: 11px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 260px;
+  }
+  #legend h4 { margin-bottom: 8px; font-size: 12px; }
+  .legend-section { margin-bottom: 8px; }
+  .legend-section h5 { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .legend-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+  .legend-line { width: 30px; height: 3px; }
+
+  @media print {
+    #sidebar, #toolbar, #legend { display: none; }
+    #main { width: 100%; }
+    body { background: #fff; }
+  }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>Influence Genogram</h1>
+
+  <!-- Node Form -->
+  <div class="section" id="node-section">
+    <div class="section-title" id="node-section-title">Add Influence</div>
+    <label>Name / Label</label>
+    <input type="text" id="node-name" placeholder='e.g. "Mom", "Church", "College"'>
+    <div class="row">
+      <div>
+        <label>Type</label>
+        <select id="node-type">
+          <option value="family">Family</option>
+          <option value="friend">Friend / Peer</option>
+          <option value="partner">Partner</option>
+          <option value="institution">Institution</option>
+          <option value="media">Media / Culture</option>
+          <option value="realization">Realization</option>
+        </select>
+      </div>
+      <div>
+        <label>Life Period</label>
+        <select id="node-period">
+          <option value="childhood">Childhood</option>
+          <option value="teens">Teens</option>
+          <option value="college">College / YA</option>
+          <option value="adulthood">Adulthood</option>
+        </select>
+      </div>
+    </div>
+    <label>Notes</label>
+    <textarea id="node-desc" placeholder="How did this influence your sexuality or worldview?"></textarea>
+    <div class="btn-group">
+      <button class="btn btn-primary" id="btn-node-save" onclick="saveNode()">Add</button>
+      <button class="btn btn-danger btn-sm" id="btn-node-delete" style="display:none" onclick="deleteNode()">Delete</button>
+      <button class="btn btn-secondary btn-sm" id="btn-node-cancel" style="display:none" onclick="deselectNode()">Cancel &amp; Add New</button>
+    </div>
+  </div>
+
+  <!-- Node List -->
+  <div class="section">
+    <div class="section-title">Influences</div>
+    <div class="item-list" id="node-list"></div>
+  </div>
+
+  <!-- Connection Form -->
+  <div class="section" id="conn-section">
+    <div class="section-title" id="conn-section-title">Add Connection</div>
+    <div class="row">
+      <div>
+        <label>From</label>
+        <select id="conn-from"></select>
+      </div>
+      <div>
+        <label>To</label>
+        <select id="conn-to"></select>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Nature</label>
+        <select id="conn-nature">
+          <option value="supportive">Supportive</option>
+          <option value="restrictive">Restrictive</option>
+          <option value="mixed">Mixed</option>
+          <option value="challenging">Challenging</option>
+          <option value="transformative">Transformative</option>
+        </select>
+      </div>
+      <div>
+        <label>Label</label>
+        <input type="text" id="conn-label" placeholder="optional">
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" id="btn-conn-save" onclick="saveConnection()">Add</button>
+      <button class="btn btn-danger btn-sm" id="btn-conn-delete" style="display:none" onclick="deleteConnection()">Delete</button>
+      <button class="btn btn-secondary btn-sm" id="btn-conn-cancel" style="display:none" onclick="deselectConn()">Cancel &amp; Add New</button>
+    </div>
+  </div>
+
+  <!-- Connection List -->
+  <div class="section">
+    <div class="section-title">Connections</div>
+    <div class="item-list" id="conn-list"></div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="toolbar">
+    <button onclick="saveAsImage()">Save as PNG</button>
+    <button onclick="window.print()">Print</button>
+    <button onclick="exportJSON()">Export Data</button>
+    <button onclick="importJSON()">Import Data</button>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
+    <span style="flex:1"></span>
+    <button onclick="toggleLegend()">Legend</button>
+  </div>
+  <div id="svg-container">
+    <svg id="genogram-svg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow-supportive" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#27ae60" stroke-width="1.5"/>
+        </marker>
+        <marker id="arrow-restrictive" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 Z" fill="#e74c3c"/>
+        </marker>
+        <marker id="arrow-mixed" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#e67e22" stroke-width="1.5"/>
+        </marker>
+        <marker id="arrow-challenging" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#3498db" stroke-width="1.5"/>
+        </marker>
+        <marker id="arrow-transformative" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 2 0 L 5 3 L 8 0 L 10 5 L 8 10 L 5 7 L 2 10 L 0 5 Z" fill="#9b59b6"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
+  <div id="legend">
+    <h4>Legend</h4>
+    <div class="legend-section">
+      <h5>Node Shapes</h5>
+      <div class="legend-row"><svg width="18" height="18"><circle cx="9" cy="9" r="8" fill="#fff" stroke="#333" stroke-width="1.5"/></svg> Family</div>
+      <div class="legend-row"><svg width="18" height="18"><rect x="1" y="1" width="16" height="16" fill="#fff" stroke="#333" stroke-width="1.5"/></svg> Institution / Culture</div>
+      <div class="legend-row"><svg width="18" height="18"><polygon points="9,1 17,9 9,17 1,9" fill="#fff" stroke="#333" stroke-width="1.5"/></svg> Friend / Peer</div>
+      <div class="legend-row"><svg width="18" height="18"><path d="M9 16 C9 16 1 10 1 6 C1 3 3 1 5.5 1 C7 1 8 2 9 3.5 C10 2 11 1 12.5 1 C15 1 17 3 17 6 C17 10 9 16 9 16Z" fill="#fff" stroke="#333" stroke-width="1.2"/></svg> Partner</div>
+      <div class="legend-row"><svg width="18" height="18"><polygon points="9,0 11.5,6 18,6.5 13,11 14.5,18 9,14 3.5,18 5,11 0,6.5 6.5,6" fill="#fff" stroke="#333" stroke-width="1"/></svg> Self-Realization</div>
+    </div>
+    <div class="legend-section">
+      <h5>Connection Lines</h5>
+      <div class="legend-row"><div class="legend-line" style="background:#27ae60"></div> Supportive</div>
+      <div class="legend-row"><div class="legend-line" style="background:#e74c3c"></div> Restrictive</div>
+      <div class="legend-row"><div class="legend-line" style="background:#e67e22; background:repeating-linear-gradient(90deg,#e67e22 0 6px,transparent 6px 10px)"></div> Mixed</div>
+      <div class="legend-row"><div class="legend-line" style="background:repeating-linear-gradient(90deg,#3498db 0 3px,transparent 3px 6px)"></div> Challenging</div>
+      <div class="legend-row"><div class="legend-line" style="background:#9b59b6; height:5px"></div> Transformative</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let nodes = [];
+let connections = [];
+let nextNodeId = 1;
+let nextConnId = 1;
+let selectedNodeId = null;
+let selectedConnId = null;
+
+const PERIODS = ['childhood', 'teens', 'college', 'adulthood'];
+const PERIOD_LABELS = { childhood: 'Childhood', teens: 'Teens', college: 'College / YA', adulthood: 'Adulthood' };
+const CONN_STYLES = {
+  supportive:     { color: '#27ae60', dash: '',    width: 2 },
+  restrictive:    { color: '#e74c3c', dash: '',    width: 2 },
+  mixed:          { color: '#e67e22', dash: '8,4', width: 2 },
+  challenging:    { color: '#3498db', dash: '4,4', width: 2 },
+  transformative: { color: '#9b59b6', dash: '',    width: 4 },
+};
+const NATURE_COLORS = {
+  supportive: '#27ae60', restrictive: '#e74c3c', mixed: '#e67e22',
+  challenging: '#3498db', transformative: '#9b59b6',
+};
+
+nodes.push({ id: 0, name: 'You', type: 'realization', period: 'adulthood', desc: 'Yourself — the center of this genogram.' });
+
+// ---- Node ----
+function selectNode(id) {
+  selectedNodeId = id;
+  selectedConnId = null;
+  const node = nodes.find(n => n.id === id);
+  if (!node) return;
+  document.getElementById('node-name').value = node.name;
+  document.getElementById('node-type').value = node.type;
+  document.getElementById('node-period').value = node.period;
+  document.getElementById('node-desc').value = node.desc || '';
+  document.getElementById('node-section-title').textContent = 'Editing: ' + node.name;
+  document.getElementById('btn-node-save').textContent = 'Save';
+  document.getElementById('btn-node-delete').style.display = node.id === 0 ? 'none' : '';
+  document.getElementById('btn-node-cancel').style.display = '';
+  refreshAll();
+}
+
+function deselectNode() {
+  selectedNodeId = null;
+  clearNodeForm();
+  refreshAll();
+}
+
+function clearNodeForm() {
+  document.getElementById('node-name').value = '';
+  document.getElementById('node-type').value = 'family';
+  document.getElementById('node-period').value = 'childhood';
+  document.getElementById('node-desc').value = '';
+  document.getElementById('node-section-title').textContent = 'Add Influence';
+  document.getElementById('btn-node-save').textContent = 'Add';
+  document.getElementById('btn-node-delete').style.display = 'none';
+  document.getElementById('btn-node-cancel').style.display = 'none';
+}
+
+function saveNode() {
+  const name = document.getElementById('node-name').value.trim();
+  if (!name) return alert('Please enter a name.');
+  const type = document.getElementById('node-type').value;
+  const period = document.getElementById('node-period').value;
+  const desc = document.getElementById('node-desc').value.trim();
+
+  if (selectedNodeId !== null) {
+    const node = nodes.find(n => n.id === selectedNodeId);
+    if (node) { node.name = name; node.type = type; node.period = period; node.desc = desc; }
+    deselectNode();
+  } else {
+    nodes.push({ id: nextNodeId++, name, type, period, desc });
+    clearNodeForm();
+  }
+  refreshAll();
+}
+
+function deleteNode() {
+  if (selectedNodeId === null || selectedNodeId === 0) return;
+  nodes = nodes.filter(n => n.id !== selectedNodeId);
+  connections = connections.filter(c => c.from !== selectedNodeId && c.to !== selectedNodeId);
+  deselectNode();
+  refreshAll();
+}
+
+// ---- Connection ----
+function selectConn(id) {
+  selectedConnId = id;
+  selectedNodeId = null;
+  clearNodeForm();
+  const conn = connections.find(c => c.id === id);
+  if (!conn) return;
+  document.getElementById('conn-from').value = conn.from;
+  document.getElementById('conn-to').value = conn.to;
+  document.getElementById('conn-nature').value = conn.nature;
+  document.getElementById('conn-label').value = conn.label || '';
+  const from = nodes.find(n => n.id === conn.from);
+  const to = nodes.find(n => n.id === conn.to);
+  document.getElementById('conn-section-title').textContent = 'Editing: ' + (from ? from.name : '?') + ' \u2192 ' + (to ? to.name : '?');
+  document.getElementById('btn-conn-save').textContent = 'Save';
+  document.getElementById('btn-conn-delete').style.display = '';
+  document.getElementById('btn-conn-cancel').style.display = '';
+  refreshAll();
+}
+
+function deselectConn() {
+  selectedConnId = null;
+  clearConnForm();
+  refreshAll();
+}
+
+function clearConnForm() {
+  document.getElementById('conn-label').value = '';
+  document.getElementById('conn-nature').value = 'supportive';
+  document.getElementById('conn-section-title').textContent = 'Add Connection';
+  document.getElementById('btn-conn-save').textContent = 'Add';
+  document.getElementById('btn-conn-delete').style.display = 'none';
+  document.getElementById('btn-conn-cancel').style.display = 'none';
+}
+
+function saveConnection() {
+  const from = parseInt(document.getElementById('conn-from').value);
+  const to = parseInt(document.getElementById('conn-to').value);
+  if (isNaN(from) || isNaN(to)) return alert('Please select both nodes.');
+  if (from === to) return alert('Source and target must be different.');
+  const nature = document.getElementById('conn-nature').value;
+  const label = document.getElementById('conn-label').value.trim();
+
+  if (selectedConnId !== null) {
+    const conn = connections.find(c => c.id === selectedConnId);
+    if (conn) { conn.from = from; conn.to = to; conn.nature = nature; conn.label = label; }
+    deselectConn();
+  } else {
+    connections.push({ id: nextConnId++, from, to, nature, label });
+    clearConnForm();
+  }
+  refreshAll();
+}
+
+function deleteConnection() {
+  if (selectedConnId === null) return;
+  connections = connections.filter(c => c.id !== selectedConnId);
+  deselectConn();
+  refreshAll();
+}
+
+// ---- Refresh ----
+function refreshAll() {
+  renderNodeList();
+  renderConnList();
+  populateConnSelectors();
+  renderSVG();
+}
+
+function renderNodeList() {
+  const list = document.getElementById('node-list');
+  list.innerHTML = nodes.map(n =>
+    `<div class="item${selectedNodeId === n.id ? ' selected' : ''}" onclick="selectNode(${n.id})">
+      <span>${n.name}</span>
+      <span class="badge">${n.type} &middot; ${PERIOD_LABELS[n.period] || n.period}</span>
+    </div>`
+  ).join('');
+}
+
+function renderConnList() {
+  const list = document.getElementById('conn-list');
+  list.innerHTML = connections.map(c => {
+    const from = nodes.find(n => n.id === c.from);
+    const to = nodes.find(n => n.id === c.to);
+    const bg = NATURE_COLORS[c.nature] || '#999';
+    return `<div class="item${selectedConnId === c.id ? ' selected' : ''}" onclick="selectConn(${c.id})">
+      <span>${from ? from.name : '?'} &rarr; ${to ? to.name : '?'}</span>
+      <span class="conn-badge" style="background:${bg}">${c.nature}</span>
+    </div>`;
+  }).join('');
+}
+
+function populateConnSelectors() {
+  const fromVal = document.getElementById('conn-from').value;
+  const toVal = document.getElementById('conn-to').value;
+  const opts = nodes.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
+  document.getElementById('conn-from').innerHTML = opts;
+  document.getElementById('conn-to').innerHTML = opts;
+  if (fromVal) document.getElementById('conn-from').value = fromVal;
+  if (toVal) document.getElementById('conn-to').value = toVal;
+}
+
+// ---- SVG ----
+const NODE_W = 120, NODE_H = 60, ROW_GAP = 120, COL_GAP = 40, PADDING = 60;
+
+function getNodeShape(type) {
+  const hw = NODE_W / 2, hh = NODE_H / 2, stroke = '#333';
+  switch (type) {
+    case 'family':
+      return `<ellipse cx="0" cy="0" rx="${hw}" ry="${hh}" fill="#fff" stroke="${stroke}" stroke-width="2"/>`;
+    case 'institution': case 'media':
+      return `<rect x="${-hw}" y="${-hh}" width="${NODE_W}" height="${NODE_H}" fill="#fff" stroke="${stroke}" stroke-width="2" rx="4"/>`;
+    case 'friend':
+      return `<polygon points="0,${-hh} ${hw},0 0,${hh} ${-hw},0" fill="#fff" stroke="${stroke}" stroke-width="2"/>`;
+    case 'partner':
+      return `<path d="M0 ${hh*0.8} C0 ${hh*0.8} ${-hw} ${hh*0.1} ${-hw} ${-hh*0.3} C${-hw} ${-hh*0.8} ${-hw*0.5} ${-hh} ${-hw*0.15} ${-hh} C${-hw*0.05} ${-hh} 0 ${-hh*0.7} 0 ${-hh*0.35} C0 ${-hh*0.7} ${hw*0.05} ${-hh} ${hw*0.15} ${-hh} C${hw*0.5} ${-hh} ${hw} ${-hh*0.8} ${hw} ${-hh*0.3} C${hw} ${hh*0.1} 0 ${hh*0.8} 0 ${hh*0.8}Z" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>`;
+    case 'realization': {
+      const pts = [];
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? Math.min(hw, hh) : Math.min(hw, hh) * 0.45;
+        const angle = Math.PI / 2 + i * Math.PI / 5;
+        pts.push(`${-Math.cos(angle)*r},${-Math.sin(angle)*r}`);
+      }
+      return `<polygon points="${pts.join(' ')}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>`;
+    }
+    default:
+      return `<circle cx="0" cy="0" r="${hh}" fill="#fff" stroke="${stroke}" stroke-width="2"/>`;
+  }
+}
+
+function layoutNodes() {
+  const groups = {};
+  PERIODS.forEach(p => groups[p] = []);
+  nodes.forEach(n => { if (!groups[n.period]) groups[n.period] = []; groups[n.period].push(n); });
+  let maxWidth = 0;
+  PERIODS.forEach(p => {
+    const rw = groups[p].length * (NODE_W + COL_GAP) - COL_GAP;
+    if (rw > maxWidth) maxWidth = rw;
+  });
+  const positions = {};
+  PERIODS.forEach((period, ri) => {
+    const g = groups[period];
+    const rw = g.length * (NODE_W + COL_GAP) - COL_GAP;
+    const sx = PADDING + (maxWidth - rw) / 2 + NODE_W / 2;
+    const y = PADDING + 30 + ri * (NODE_H + ROW_GAP) + NODE_H / 2;
+    g.forEach((n, i) => { positions[n.id] = { x: sx + i * (NODE_W + COL_GAP), y }; });
+  });
+  return { positions, width: maxWidth + PADDING * 2, height: PADDING * 2 + 30 + PERIODS.length * (NODE_H + ROW_GAP) };
+}
+
+function renderSVG() {
+  const svg = document.getElementById('genogram-svg');
+  const { positions, width, height } = layoutNodes();
+  svg.setAttribute('viewBox', `0 0 ${Math.max(width, 600)} ${Math.max(height, 400)}`);
+  const defs = svg.querySelector('defs').outerHTML;
+  svg.innerHTML = defs;
+
+  PERIODS.forEach((period, ri) => {
+    const y = PADDING + 15 + ri * (NODE_H + ROW_GAP);
+    const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    lbl.setAttribute('x', '12'); lbl.setAttribute('y', y);
+    lbl.setAttribute('font-size', '13'); lbl.setAttribute('font-weight', '600'); lbl.setAttribute('fill', '#999');
+    lbl.textContent = (PERIOD_LABELS[period] || period).toUpperCase();
+    svg.appendChild(lbl);
+    if (ri > 0) {
+      const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      ln.setAttribute('x1', '0'); ln.setAttribute('x2', Math.max(width, 600));
+      ln.setAttribute('y1', y - ROW_GAP / 2 + 15); ln.setAttribute('y2', y - ROW_GAP / 2 + 15);
+      ln.setAttribute('stroke', '#eee'); ln.setAttribute('stroke-width', '1');
+      svg.appendChild(ln);
+    }
+  });
+
+  connections.forEach(conn => {
+    const fp = positions[conn.from], tp = positions[conn.to];
+    if (!fp || !tp) return;
+    const style = CONN_STYLES[conn.nature] || CONN_STYLES.supportive;
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.style.cursor = 'pointer';
+    g.onclick = (e) => { e.stopPropagation(); selectConn(conn.id); };
+
+    const dx = tp.x - fp.x, dy = tp.y - fp.y, dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist === 0) return;
+    const nx = dx/dist, ny = dy/dist, off = NODE_W/2 + 4;
+    const x1 = fp.x + nx*off, y1 = fp.y + ny*off, x2 = tp.x - nx*off, y2 = tp.y - ny*off;
+
+    const hit = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    hit.setAttribute('x1', x1); hit.setAttribute('y1', y1);
+    hit.setAttribute('x2', x2); hit.setAttribute('y2', y2);
+    hit.setAttribute('stroke', 'transparent'); hit.setAttribute('stroke-width', '12');
+    g.appendChild(hit);
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('stroke', style.color); line.setAttribute('stroke-width', style.width);
+    if (style.dash) line.setAttribute('stroke-dasharray', style.dash);
+    line.setAttribute('marker-end', `url(#arrow-${conn.nature})`);
+    if (selectedConnId === conn.id) {
+      line.setAttribute('stroke-width', style.width + 2);
+      line.setAttribute('filter', 'drop-shadow(0 0 3px rgba(0,0,0,0.3))');
+    }
+    g.appendChild(line);
+
+    if (conn.label) {
+      const mx = (x1+x2)/2, my = (y1+y2)/2;
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('x', mx); t.setAttribute('y', my - 4);
+      t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '11');
+      t.setAttribute('fill', style.color); t.setAttribute('font-weight', '500');
+      t.textContent = conn.label;
+      g.appendChild(t);
+    }
+    svg.appendChild(g);
+  });
+
+  // Collect label bounding boxes for collision avoidance
+  const labelBoxes = [];
+
+  nodes.forEach(node => {
+    const pos = positions[node.id];
+    if (!pos) return;
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
+    g.style.cursor = 'pointer';
+    g.onclick = (e) => { e.stopPropagation(); selectNode(node.id); };
+
+    if (selectedNodeId === node.id) {
+      const h = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      h.setAttribute('cx', '0'); h.setAttribute('cy', '0'); h.setAttribute('r', NODE_W/2 + 6);
+      h.setAttribute('fill', 'none'); h.setAttribute('stroke', '#4a90d9');
+      h.setAttribute('stroke-width', '2'); h.setAttribute('stroke-dasharray', '4,3');
+      g.appendChild(h);
+    }
+
+    g.innerHTML += getNodeShape(node.type);
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', '0'); text.setAttribute('y', '4');
+    text.setAttribute('text-anchor', 'middle'); text.setAttribute('font-size', '13');
+    text.setAttribute('font-weight', '600'); text.setAttribute('fill', '#333');
+    text.textContent = node.name.length > 14 ? node.name.slice(0, 13) + '\u2026' : node.name;
+    g.appendChild(text);
+    svg.appendChild(g);
+
+    // Render notes next to node (skip "You" node)
+    if (node.id !== 0 && node.desc) {
+      const NOTE_MAX_W = 120;
+      const NOTE_FONT = 10;
+      const NOTE_LINE_H = 13;
+      // Word-wrap the description
+      const words = node.desc.split(/\s+/);
+      const lines = [];
+      let cur = '';
+      words.forEach(w => {
+        const test = cur ? cur + ' ' + w : w;
+        if (test.length * NOTE_FONT * 0.55 > NOTE_MAX_W && cur) {
+          lines.push(cur);
+          cur = w;
+        } else {
+          cur = test;
+        }
+      });
+      if (cur) lines.push(cur);
+      // Cap at 5 lines
+      if (lines.length > 5) { lines.length = 5; lines[4] = lines[4].slice(0, -1) + '\u2026'; }
+
+      const blockH = lines.length * NOTE_LINE_H + 6;
+      const blockW = NOTE_MAX_W + 8;
+
+      // Try 4 positions: right, left, below-right, below-left
+      const candidates = [
+        { x: pos.x + NODE_W/2 + 10, y: pos.y - blockH/2, anchor: 'start' },
+        { x: pos.x - NODE_W/2 - 10 - blockW, y: pos.y - blockH/2, anchor: 'start' },
+        { x: pos.x + NODE_W/2 + 10, y: pos.y + NODE_H/2 + 4, anchor: 'start' },
+        { x: pos.x - NODE_W/2 - 10 - blockW, y: pos.y + NODE_H/2 + 4, anchor: 'start' },
+      ];
+
+      function boxOverlaps(bx, by) {
+        for (const lb of labelBoxes) {
+          if (bx < lb.x + lb.w && bx + blockW > lb.x && by < lb.y + lb.h && by + blockH > lb.y) return true;
+        }
+        // Also avoid overlapping nodes
+        for (const n of nodes) {
+          const np = positions[n.id];
+          if (!np) continue;
+          const nx1 = np.x - NODE_W/2 - 4, ny1 = np.y - NODE_H/2 - 4;
+          const nx2 = np.x + NODE_W/2 + 4, ny2 = np.y + NODE_H/2 + 4;
+          if (bx < nx2 && bx + blockW > nx1 && by < ny2 && by + blockH > ny1) return true;
+        }
+        return false;
+      }
+
+      let best = candidates[0];
+      for (const c of candidates) {
+        if (!boxOverlaps(c.x, c.y)) { best = c; break; }
+      }
+      // If all overlap, nudge downward until clear
+      if (boxOverlaps(best.x, best.y)) {
+        let nudge = 0;
+        while (boxOverlaps(best.x, best.y + nudge) && nudge < 200) nudge += NOTE_LINE_H;
+        best = { ...best, y: best.y + nudge };
+      }
+
+      labelBoxes.push({ x: best.x, y: best.y, w: blockW, h: blockH });
+
+      const ng = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      // Background
+      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bg.setAttribute('x', best.x); bg.setAttribute('y', best.y);
+      bg.setAttribute('width', blockW); bg.setAttribute('height', blockH);
+      bg.setAttribute('rx', '3'); bg.setAttribute('fill', 'rgba(255,255,250,0.92)');
+      bg.setAttribute('stroke', '#ddd'); bg.setAttribute('stroke-width', '0.5');
+      ng.appendChild(bg);
+
+      lines.forEach((ln, li) => {
+        const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        t.setAttribute('x', best.x + 4);
+        t.setAttribute('y', best.y + 12 + li * NOTE_LINE_H);
+        t.setAttribute('font-size', NOTE_FONT);
+        t.setAttribute('fill', '#666');
+        t.setAttribute('font-style', 'italic');
+        t.textContent = ln;
+        ng.appendChild(t);
+      });
+      svg.appendChild(ng);
+    }
+  });
+}
+
+// ---- Export / Import ----
+function saveAsImage() {
+  const svg = document.getElementById('genogram-svg');
+  const svgData = new XMLSerializer().serializeToString(svg);
+  const canvas = document.createElement('canvas');
+  const vb = svg.getAttribute('viewBox').split(' ').map(Number);
+  canvas.width = vb[2] * 2; canvas.height = vb[3] * 2;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const img = new Image();
+  img.onload = () => {
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const a = document.createElement('a');
+    a.download = 'genogram.png'; a.href = canvas.toDataURL('image/png'); a.click();
+  };
+  img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+}
+
+function exportJSON() {
+  const data = JSON.stringify({ nodes, connections, nextNodeId, nextConnId }, null, 2);
+  const a = document.createElement('a');
+  a.download = 'genogram-data.json';
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(data);
+  a.click();
+}
+
+function importJSON() { document.getElementById('import-file').click(); }
+function handleImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      nodes = data.nodes || []; connections = data.connections || [];
+      nextNodeId = data.nextNodeId || nodes.length + 1;
+      nextConnId = data.nextConnId || connections.length + 1;
+      refreshAll();
+    } catch (err) { alert('Invalid JSON file.'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function toggleLegend() {
+  const l = document.getElementById('legend');
+  l.style.display = l.style.display === 'none' ? '' : 'none';
+}
+
+// Click SVG background to deselect
+document.getElementById('genogram-svg').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('genogram-svg')) {
+    deselectNode(); deselectConn();
+  }
+});
+
+refreshAll();
+</script>
+</body>
+</html>
