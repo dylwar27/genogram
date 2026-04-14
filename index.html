@@ -77,8 +77,49 @@
   .legend-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
   .legend-line { width: 30px; height: 3px; }
 
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: none; align-items: center; justify-content: center; z-index: 1000;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: #fff; border-radius: 8px; width: 600px; max-width: 92vw;
+    max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  }
+  .modal-header {
+    padding: 16px 20px; border-bottom: 1px solid #eee;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .modal-header h2 { font-size: 16px; font-weight: 600; }
+  .modal-close {
+    background: none; border: none; font-size: 22px; cursor: pointer;
+    color: #888; line-height: 1; padding: 0 4px;
+  }
+  .modal-body { padding: 20px; }
+  .modal-footer {
+    padding: 14px 20px; border-top: 1px solid #eee;
+    display: flex; justify-content: flex-end; gap: 8px;
+  }
+  .modal-body .hint {
+    font-size: 12px; color: #888; margin: 4px 0 8px;
+  }
+  .modal-body .hint a { color: #4a90d9; }
+  .modal-body textarea { min-height: 180px; font-family: inherit; }
+  .status-msg {
+    padding: 10px 12px; border-radius: 4px; font-size: 13px; margin: 10px 0;
+  }
+  .status-msg.error { background: #fde8e6; color: #c0392b; border: 1px solid #f5c6c0; }
+  .status-msg.info { background: #e8f4fd; color: #2874a6; border: 1px solid #b8dcf5; }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px; border: 2px solid #fff;
+    border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;
+    vertical-align: middle; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   @media print {
-    #sidebar, #toolbar, #legend { display: none; }
+    #sidebar, #toolbar, #legend, .modal-backdrop { display: none; }
     #main { width: 100%; }
     body { background: #fff; }
   }
@@ -176,6 +217,7 @@
 
 <div id="main">
   <div id="toolbar">
+    <button onclick="openAIModal()" style="background:#4a90d9; color:#fff; border-color:#4a90d9">✨ Generate from Text</button>
     <button onclick="saveAsImage()">Save as PNG</button>
     <button onclick="window.print()">Print</button>
     <button onclick="exportJSON()">Export Data</button>
@@ -222,6 +264,48 @@
       <div class="legend-row"><div class="legend-line" style="background:#e67e22; background:repeating-linear-gradient(90deg,#e67e22 0 6px,transparent 6px 10px)"></div> Mixed</div>
       <div class="legend-row"><div class="legend-line" style="background:repeating-linear-gradient(90deg,#3498db 0 3px,transparent 3px 6px)"></div> Challenging</div>
       <div class="legend-row"><div class="legend-line" style="background:#9b59b6; height:5px"></div> Transformative</div>
+    </div>
+  </div>
+</div>
+
+<!-- AI Generation Modal -->
+<div class="modal-backdrop" id="ai-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>✨ Generate Genogram from Text</h2>
+      <button class="modal-close" onclick="closeAIModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <label>Anthropic API Key</label>
+      <input type="password" id="ai-api-key" placeholder="sk-ant-...">
+      <div class="hint">
+        Stored only in your browser (localStorage). Get a key at
+        <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a>.
+      </div>
+
+      <label style="margin-top:12px">Model</label>
+      <select id="ai-model">
+        <option value="claude-sonnet-4-5">Claude Sonnet 4.5 (recommended)</option>
+        <option value="claude-opus-4-5">Claude Opus 4.5 (deeper analysis)</option>
+        <option value="claude-haiku-4-5">Claude Haiku 4.5 (fastest/cheapest)</option>
+      </select>
+
+      <label style="margin-top:12px">Narrative / Transcript</label>
+      <textarea id="ai-narrative" placeholder="Paste a transcript or write a narrative about the people, institutions, and cultural forces that shaped your sexuality and worldview across your life..."></textarea>
+      <div class="hint">
+        Claude will extract influences and relationships and build the graph. Works best with rich, specific stories that mention who/what influenced you, when (childhood/teens/college/adulthood), and how (supportive, restrictive, etc.).
+      </div>
+
+      <label style="margin-top:12px">
+        <input type="checkbox" id="ai-merge" style="width:auto; margin-right:6px; vertical-align:middle">
+        Merge with existing graph (otherwise replaces it)
+      </label>
+
+      <div id="ai-status"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAIModal()">Cancel</button>
+      <button class="btn btn-primary" id="ai-generate-btn" onclick="generateFromText()">Generate</button>
     </div>
   </div>
 </div>
@@ -693,6 +777,163 @@ document.getElementById('genogram-svg').addEventListener('click', (e) => {
   if (e.target === document.getElementById('genogram-svg')) {
     deselectNode(); deselectConn();
   }
+});
+
+// ---- AI Generation ----
+function openAIModal() {
+  document.getElementById('ai-modal').classList.add('open');
+  const saved = localStorage.getItem('anthropic-api-key') || '';
+  document.getElementById('ai-api-key').value = saved;
+  const savedModel = localStorage.getItem('anthropic-model');
+  if (savedModel) document.getElementById('ai-model').value = savedModel;
+  document.getElementById('ai-status').innerHTML = '';
+}
+
+function closeAIModal() {
+  document.getElementById('ai-modal').classList.remove('open');
+}
+
+function setAIStatus(html, cls) {
+  const el = document.getElementById('ai-status');
+  el.innerHTML = html ? `<div class="status-msg ${cls || 'info'}">${html}</div>` : '';
+}
+
+async function generateFromText() {
+  const key = document.getElementById('ai-api-key').value.trim();
+  const model = document.getElementById('ai-model').value;
+  const narrative = document.getElementById('ai-narrative').value.trim();
+  const merge = document.getElementById('ai-merge').checked;
+
+  if (!key) return setAIStatus('Please enter an Anthropic API key.', 'error');
+  if (!narrative) return setAIStatus('Please enter a narrative or transcript.', 'error');
+
+  localStorage.setItem('anthropic-api-key', key);
+  localStorage.setItem('anthropic-model', model);
+
+  const btn = document.getElementById('ai-generate-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Generating...';
+  setAIStatus('Sending to Claude...', 'info');
+
+  const systemPrompt = `You extract "influence genograms" from personal narratives — visual maps of who and what shaped someone's sexuality and worldview across their life.
+
+Return ONLY valid JSON (no markdown, no prose) matching this exact schema:
+
+{
+  "nodes": [
+    { "id": <integer>, "name": "<string>", "type": "<type>", "period": "<period>", "desc": "<1-2 sentence description>" }
+  ],
+  "connections": [
+    { "id": <integer>, "from": <source node id>, "to": <target node id>, "nature": "<nature>", "label": "<short phrase, optional>" }
+  ]
+}
+
+VALID VALUES:
+- type: "family" | "friend" | "partner" | "institution" | "media" | "realization"
+- period: "childhood" | "teens" | "college" | "adulthood"
+- nature: "supportive" | "restrictive" | "mixed" | "challenging" | "transformative"
+
+RULES:
+- Node id 0 is reserved for the narrator ("You") — always include it with name="You", type="realization", period="adulthood".
+- All other nodes use sequential integer ids starting at 1.
+- Node desc should describe HOW this influenced the narrator's sexuality or worldview (1-2 sentences).
+- Connections should show the flow of influence — who influenced whom. Most connections will end at the "You" node, but nodes can influence each other (e.g. a parent's church influenced the parent who influenced You).
+- Connection label is an optional short phrase (<5 words) describing the influence (e.g. "taught shame", "modeled openness").
+- Place each node in the life period when that influence was most active.
+- Be specific — prefer named, concrete entities ("Grandma Rose", "Catholic school") over vague ones ("family").
+- Aim for 5-15 nodes and 5-20 connections for a rich narrative; fewer is fine for short ones.
+- Output JSON ONLY. No explanation, no markdown fencing.`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: model,
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: `Here is the narrative:\n\n${narrative}\n\nReturn the genogram JSON.` }]
+      })
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      let msg = `API error ${resp.status}`;
+      try {
+        const j = JSON.parse(errText);
+        if (j.error && j.error.message) msg += `: ${j.error.message}`;
+      } catch {}
+      throw new Error(msg);
+    }
+
+    const data = await resp.json();
+    const textContent = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+
+    // Extract JSON (strip any accidental code fences)
+    let jsonText = textContent.trim();
+    const fence = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fence) jsonText = fence[1].trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch (e) {
+      throw new Error('Claude returned invalid JSON. Try a different model or a clearer narrative.');
+    }
+
+    const newNodes = parsed.nodes || [];
+    const newConns = parsed.connections || [];
+
+    if (merge) {
+      // Remap incoming ids to avoid collisions, keeping id 0 aligned
+      const idMap = { 0: 0 };
+      newNodes.forEach(n => {
+        if (n.id === 0) return;
+        idMap[n.id] = nextNodeId++;
+      });
+      newNodes.forEach(n => {
+        if (n.id === 0) return;
+        nodes.push({ id: idMap[n.id], name: n.name, type: n.type, period: n.period, desc: n.desc || '' });
+      });
+      newConns.forEach(c => {
+        const from = idMap[c.from], to = idMap[c.to];
+        if (from === undefined || to === undefined) return;
+        connections.push({ id: nextConnId++, from, to, nature: c.nature, label: c.label || '' });
+      });
+    } else {
+      nodes = newNodes.map(n => ({
+        id: n.id, name: n.name, type: n.type, period: n.period, desc: n.desc || ''
+      }));
+      connections = newConns.map((c, i) => ({
+        id: i + 1, from: c.from, to: c.to, nature: c.nature, label: c.label || ''
+      }));
+      // Ensure "You" node exists
+      if (!nodes.find(n => n.id === 0)) {
+        nodes.unshift({ id: 0, name: 'You', type: 'realization', period: 'adulthood', desc: 'Yourself — the center of this genogram.' });
+      }
+      nextNodeId = Math.max(...nodes.map(n => n.id), 0) + 1;
+      nextConnId = connections.length + 1;
+    }
+
+    refreshAll();
+    setAIStatus(`Generated ${newNodes.length} nodes and ${newConns.length} connections.`, 'info');
+    setTimeout(closeAIModal, 800);
+  } catch (err) {
+    setAIStatus(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Generate';
+  }
+}
+
+// Close modal when clicking backdrop
+document.getElementById('ai-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'ai-modal') closeAIModal();
 });
 
 refreshAll();
