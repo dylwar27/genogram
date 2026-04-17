@@ -5,112 +5,201 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Influence Genogram</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; display: flex; height: 100vh; background: #f5f5f5; color: #333; }
+  /* ---- Color palettes (CSS variables, swapped via body class) ---- */
+  :root {
+    --c-supportive: #27ae60;
+    --c-restrictive: #e74c3c;
+    --c-mixed: #e67e22;
+    --c-challenging: #3498db;
+    --c-transformative: #9b59b6;
+    --c-text: #222;
+    --c-text-muted: #666;
+    --c-text-faint: #888;
+    --c-accent: #4a90d9;
+    --c-bg: #f5f5f5;
+    --c-surface: #fff;
+    --c-border: #ddd;
+    --c-border-light: #eee;
+    --node-font-size: 13px;
+    --note-font-size: 10px;
+    --node-w: 120;
+    --node-h: 60;
+  }
+  /* Okabe-Ito color-blind safe palette */
+  body.cb-safe {
+    --c-supportive: #009E73;   /* bluish green */
+    --c-restrictive: #D55E00;  /* vermillion */
+    --c-mixed: #E69F00;        /* orange */
+    --c-challenging: #0072B2;  /* blue */
+    --c-transformative: #CC79A7; /* reddish purple */
+    --c-accent: #0072B2;
+  }
+  /* Text size scales */
+  body.text-large { --node-font-size: 15px; --note-font-size: 12px; --node-w: 140; --node-h: 70; }
+  body.text-xl    { --node-font-size: 17px; --note-font-size: 14px; --node-w: 160; --node-h: 80; }
 
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { font-size: 14px; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    display: flex; height: 100vh; background: var(--c-bg); color: var(--c-text);
+  }
+
+  /* Skip link */
+  .skip-link {
+    position: absolute; top: -40px; left: 8px; background: var(--c-accent); color: #fff;
+    padding: 8px 12px; border-radius: 4px; z-index: 2000; text-decoration: none; font-size: 13px;
+  }
+  .skip-link:focus { top: 8px; }
+
+  /* Visually hidden but available to screen readers */
+  .sr-only {
+    position: absolute !important; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0);
+    white-space: nowrap; border: 0;
+  }
+
+  /* Focus rings */
+  :focus-visible {
+    outline: 3px solid var(--c-accent); outline-offset: 2px; border-radius: 3px;
+  }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 3px solid var(--c-accent); outline-offset: 1px;
+  }
+
+  /* Sidebar */
   #sidebar {
-    width: 340px; min-width: 340px; background: #fff; border-right: 1px solid #ddd;
+    width: 340px; min-width: 340px; background: var(--c-surface);
+    border-right: 1px solid var(--c-border);
     display: flex; flex-direction: column; overflow-y: auto;
   }
-  #sidebar h1 { font-size: 18px; padding: 16px; border-bottom: 1px solid #eee; background: #fafafa; }
+  #sidebar-header {
+    padding: 12px 16px; border-bottom: 1px solid var(--c-border-light); background: #fafafa;
+  }
+  #sidebar-header h1 { font-size: 17px; }
+  #active-profile {
+    font-size: 11px; color: var(--c-text-muted); margin-top: 3px;
+  }
+  #active-profile strong { color: var(--c-accent); }
 
-  .section { padding: 14px 16px; border-bottom: 1px solid #eee; }
+  .section { padding: 14px 16px; border-bottom: 1px solid var(--c-border-light); }
   .section-title {
     font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-    color: #999; margin-bottom: 10px;
+    color: var(--c-text-muted); margin-bottom: 10px;
   }
 
-  label { display: block; font-size: 12px; font-weight: 600; margin: 8px 0 3px; color: #555; }
+  label {
+    display: block; font-size: 12px; font-weight: 600; margin: 8px 0 3px;
+    color: var(--c-text);
+  }
   label:first-of-type { margin-top: 0; }
   input, select, textarea {
-    width: 100%; padding: 7px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;
+    width: 100%; padding: 7px 8px; border: 1px solid var(--c-border);
+    border-radius: 4px; font-size: 13px; font-family: inherit; color: var(--c-text);
+    background: var(--c-surface);
   }
   textarea { resize: vertical; min-height: 50px; }
   .row { display: flex; gap: 8px; }
   .row > * { flex: 1; }
 
   .btn {
-    display: inline-block; padding: 7px 14px; border: none; border-radius: 4px;
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 7px 14px; border: none; border-radius: 4px;
     font-size: 12px; font-weight: 500; cursor: pointer; transition: background .2s;
   }
-  .btn-primary { background: #4a90d9; color: #fff; }
+  .btn-primary { background: var(--c-accent); color: #fff; }
   .btn-primary:hover { background: #3a7bc8; }
   .btn-danger { background: #e74c3c; color: #fff; }
   .btn-danger:hover { background: #c0392b; }
-  .btn-secondary { background: #eee; color: #333; }
+  .btn-secondary { background: #eee; color: var(--c-text); }
   .btn-secondary:hover { background: #ddd; }
   .btn-sm { padding: 4px 10px; font-size: 11px; }
-  .btn-group { display: flex; gap: 6px; margin-top: 10px; }
+  .btn-group { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .btn[disabled] { opacity: 0.6; cursor: not-allowed; }
 
   .item-list { margin-top: 8px; }
   .item {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 7px 8px; border: 1px solid #eee; border-radius: 4px; margin-bottom: 3px;
+    padding: 7px 8px; border: 1px solid var(--c-border-light); border-radius: 4px; margin-bottom: 3px;
     cursor: pointer; font-size: 13px; transition: background .12s;
   }
   .item:hover { background: #f0f7ff; }
-  .item.selected { background: #e3f0ff; border-color: #4a90d9; }
+  .item.selected { background: #e3f0ff; border-color: var(--c-accent); }
   .badge {
-    font-size: 10px; padding: 2px 6px; border-radius: 8px; background: #eee; color: #666;
-    white-space: nowrap;
+    font-size: 10px; padding: 2px 6px; border-radius: 8px;
+    background: #eee; color: var(--c-text-muted); white-space: nowrap;
   }
   .conn-badge { font-size: 10px; padding: 2px 6px; border-radius: 8px; color: #fff; }
 
-  #main { flex: 1; display: flex; flex-direction: column; position: relative; }
+  /* Main area */
+  #main { flex: 1; display: flex; flex-direction: column; position: relative; min-width: 0; }
   #toolbar {
-    display: flex; align-items: center; gap: 8px; padding: 8px 16px;
-    background: #fff; border-bottom: 1px solid #ddd;
+    display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+    background: var(--c-surface); border-bottom: 1px solid var(--c-border);
+    flex-wrap: wrap;
   }
-  #toolbar button { padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; background: #fff; cursor: pointer; font-size: 12px; }
+  #toolbar button {
+    padding: 6px 12px; border: 1px solid var(--c-border); border-radius: 4px;
+    background: var(--c-surface); cursor: pointer; font-size: 12px; color: var(--c-text);
+  }
   #toolbar button:hover { background: #f0f0f0; }
-  #svg-container { flex: 1; overflow: auto; position: relative; }
-  #genogram-svg { width: 100%; height: 100%; }
-
-  #legend {
-    position: absolute; bottom: 16px; right: 16px; background: rgba(255,255,255,0.95);
-    border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-size: 11px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 260px;
+  #toolbar button.primary {
+    background: var(--c-accent); color: #fff; border-color: var(--c-accent);
   }
-  #legend h4 { margin-bottom: 8px; font-size: 12px; }
+  #toolbar button.primary:hover { background: #3a7bc8; }
+  #svg-container { flex: 1; overflow: auto; position: relative; background: var(--c-bg); }
+  #genogram-svg { width: 100%; height: 100%; display: block; }
+
+  /* Legend */
+  #legend {
+    position: absolute; bottom: 16px; right: 16px; background: rgba(255,255,255,0.96);
+    border: 1px solid var(--c-border); border-radius: 8px; padding: 12px; font-size: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 280px; color: var(--c-text);
+  }
+  #legend h4 { margin-bottom: 8px; font-size: 13px; }
   .legend-section { margin-bottom: 8px; }
-  .legend-section h5 { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .legend-section h5 {
+    font-size: 11px; color: var(--c-text-muted); margin-bottom: 4px; font-weight: 600;
+  }
   .legend-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
   .legend-line { width: 30px; height: 3px; }
 
   /* Modal */
   .modal-backdrop {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
     display: none; align-items: center; justify-content: center; z-index: 1000;
   }
   .modal-backdrop.open { display: flex; }
   .modal {
-    background: #fff; border-radius: 8px; width: 600px; max-width: 92vw;
+    background: var(--c-surface); border-radius: 8px; width: 640px; max-width: 92vw;
     max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    display: flex; flex-direction: column;
   }
   .modal-header {
-    padding: 16px 20px; border-bottom: 1px solid #eee;
+    padding: 16px 20px; border-bottom: 1px solid var(--c-border-light);
     display: flex; justify-content: space-between; align-items: center;
   }
   .modal-header h2 { font-size: 16px; font-weight: 600; }
   .modal-close {
     background: none; border: none; font-size: 22px; cursor: pointer;
-    color: #888; line-height: 1; padding: 0 4px;
+    color: var(--c-text-faint); line-height: 1; padding: 0 4px;
   }
-  .modal-body { padding: 20px; }
+  .modal-body { padding: 20px; overflow-y: auto; }
   .modal-footer {
-    padding: 14px 20px; border-top: 1px solid #eee;
+    padding: 14px 20px; border-top: 1px solid var(--c-border-light);
     display: flex; justify-content: flex-end; gap: 8px;
   }
   .modal-body .hint {
-    font-size: 12px; color: #888; margin: 4px 0 8px;
+    font-size: 12px; color: var(--c-text-muted); margin: 4px 0 8px; line-height: 1.4;
   }
-  .modal-body .hint a { color: #4a90d9; }
-  .modal-body textarea { min-height: 180px; font-family: inherit; }
+  .modal-body .hint a { color: var(--c-accent); }
+  .modal-body textarea { min-height: 180px; }
   .status-msg {
     padding: 10px 12px; border-radius: 4px; font-size: 13px; margin: 10px 0;
   }
   .status-msg.error { background: #fde8e6; color: #c0392b; border: 1px solid #f5c6c0; }
   .status-msg.info { background: #e8f4fd; color: #2874a6; border: 1px solid #b8dcf5; }
+  .status-msg.success { background: #e8f8e8; color: #1e8449; border: 1px solid #bfe8bf; }
   .spinner {
     display: inline-block; width: 14px; height: 14px; border: 2px solid #fff;
     border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;
@@ -118,26 +207,77 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* Profile list */
+  .profile-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; border: 1px solid var(--c-border-light);
+    border-radius: 4px; margin-bottom: 6px;
+  }
+  .profile-row.active { background: #f0f7ff; border-color: var(--c-accent); }
+  .profile-row-name { font-weight: 600; font-size: 14px; }
+  .profile-row-actions { display: flex; gap: 6px; }
+
+  /* Statement output */
+  #statement-output {
+    background: #fafafa; border: 1px solid var(--c-border-light); border-radius: 4px;
+    padding: 16px; min-height: 200px; max-height: 400px; overflow-y: auto;
+    white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: var(--c-text);
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+
+  /* Presentation mode */
+  body.presenting #sidebar,
+  body.presenting #toolbar { display: none; }
+  body.presenting #present-controls { display: flex; }
+  #present-controls {
+    display: none; position: absolute; top: 12px; right: 12px; gap: 6px; z-index: 100;
+    background: rgba(255,255,255,0.96); border: 1px solid var(--c-border);
+    border-radius: 6px; padding: 6px;
+  }
+  #present-controls button {
+    padding: 5px 10px; border: 1px solid var(--c-border); border-radius: 4px;
+    background: var(--c-surface); cursor: pointer; font-size: 12px;
+  }
+
+  /* SVG focus styling */
+  #genogram-svg .node-group:focus-visible,
+  #genogram-svg .conn-group:focus-visible {
+    outline: none;
+  }
+  #genogram-svg .node-group:focus-visible .focus-ring,
+  #genogram-svg .conn-group:focus-visible .focus-ring {
+    display: block;
+  }
+  #genogram-svg .focus-ring { display: none; }
+
+  /* Print */
   @media print {
-    #sidebar, #toolbar, #legend, .modal-backdrop { display: none; }
+    @page { size: landscape; margin: 1cm; }
+    #sidebar, #toolbar, #legend, .modal-backdrop, #present-controls, .skip-link { display: none !important; }
     #main { width: 100%; }
     body { background: #fff; }
+    #svg-container { overflow: visible; }
   }
 </style>
 </head>
 <body>
 
-<div id="sidebar">
-  <h1>Influence Genogram</h1>
+<a class="skip-link" href="#genogram-svg">Skip to genogram</a>
+
+<aside id="sidebar" aria-label="Editor sidebar">
+  <div id="sidebar-header">
+    <h1>Influence Genogram</h1>
+    <div id="active-profile" aria-live="polite">No profile loaded — <a href="#" onclick="openProfileModal();return false;">open or create one</a></div>
+  </div>
 
   <!-- Node Form -->
   <div class="section" id="node-section">
     <div class="section-title" id="node-section-title">Add Influence</div>
-    <label>Name / Label</label>
+    <label for="node-name">Name / Label</label>
     <input type="text" id="node-name" placeholder='e.g. "Mom", "Church", "College"'>
     <div class="row">
       <div>
-        <label>Type</label>
+        <label for="node-type">Type</label>
         <select id="node-type">
           <option value="family">Family</option>
           <option value="friend">Friend / Peer</option>
@@ -148,7 +288,7 @@
         </select>
       </div>
       <div>
-        <label>Life Period</label>
+        <label for="node-period">Life Period</label>
         <select id="node-period">
           <option value="childhood">Childhood</option>
           <option value="teens">Teens</option>
@@ -157,7 +297,7 @@
         </select>
       </div>
     </div>
-    <label>Notes</label>
+    <label for="node-desc">Notes</label>
     <textarea id="node-desc" placeholder="How did this influence your sexuality or worldview?"></textarea>
     <div class="btn-group">
       <button class="btn btn-primary" id="btn-node-save" onclick="saveNode()">Add</button>
@@ -169,7 +309,7 @@
   <!-- Node List -->
   <div class="section">
     <div class="section-title">Influences</div>
-    <div class="item-list" id="node-list"></div>
+    <div class="item-list" id="node-list" role="list" aria-label="List of influences"></div>
   </div>
 
   <!-- Connection Form -->
@@ -177,17 +317,17 @@
     <div class="section-title" id="conn-section-title">Add Connection</div>
     <div class="row">
       <div>
-        <label>From</label>
+        <label for="conn-from">From</label>
         <select id="conn-from"></select>
       </div>
       <div>
-        <label>To</label>
+        <label for="conn-to">To</label>
         <select id="conn-to"></select>
       </div>
     </div>
     <div class="row">
       <div>
-        <label>Nature</label>
+        <label for="conn-nature">Nature</label>
         <select id="conn-nature">
           <option value="supportive">Supportive</option>
           <option value="restrictive">Restrictive</option>
@@ -197,7 +337,7 @@
         </select>
       </div>
       <div>
-        <label>Label</label>
+        <label for="conn-label">Label</label>
         <input type="text" id="conn-label" placeholder="optional">
       </div>
     </div>
@@ -211,86 +351,110 @@
   <!-- Connection List -->
   <div class="section">
     <div class="section-title">Connections</div>
-    <div class="item-list" id="conn-list"></div>
+    <div class="item-list" id="conn-list" role="list" aria-label="List of connections"></div>
   </div>
-</div>
 
-<div id="main">
-  <div id="toolbar">
-    <button onclick="openAIModal()" style="background:#4a90d9; color:#fff; border-color:#4a90d9">✨ Generate from Text</button>
-    <button onclick="saveAsImage()">Save as PNG</button>
-    <button onclick="window.print()">Print</button>
-    <button onclick="exportJSON()">Export Data</button>
-    <button onclick="importJSON()">Import Data</button>
+  <!-- Screen-reader-only table view of the entire graph -->
+  <div class="sr-only" aria-label="Genogram contents in tabular form">
+    <h2>Genogram contents</h2>
+    <h3>Influences</h3>
+    <table id="sr-nodes-table"><thead><tr><th>Name</th><th>Type</th><th>Period</th><th>Notes</th></tr></thead><tbody></tbody></table>
+    <h3>Connections</h3>
+    <table id="sr-conns-table"><thead><tr><th>From</th><th>To</th><th>Nature</th><th>Label</th></tr></thead><tbody></tbody></table>
+  </div>
+</aside>
+
+<main id="main">
+  <div id="toolbar" role="toolbar" aria-label="Genogram actions">
+    <button onclick="openProfileModal()" aria-label="Open profile manager">👤 Profiles</button>
+    <button class="primary" onclick="openAIModal()" aria-label="Generate genogram from text using AI">✨ Generate from Text</button>
+    <button class="primary" onclick="openStatementModal()" aria-label="Generate written statement using AI">📝 Written Statement</button>
+    <button onclick="saveAsPNG()" aria-label="Download as PNG image">Save PNG</button>
+    <button onclick="saveAsSVG()" aria-label="Download as SVG vector">Save SVG</button>
+    <button onclick="window.print()" aria-label="Print">Print</button>
+    <button onclick="exportJSON()" aria-label="Export raw JSON data">Export JSON</button>
+    <button onclick="importJSON()" aria-label="Import JSON data">Import JSON</button>
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
     <span style="flex:1"></span>
-    <button onclick="toggleLegend()">Legend</button>
+    <button onclick="togglePalette()" aria-label="Toggle color-blind safe palette" id="btn-palette">Palette</button>
+    <button onclick="cycleTextSize()" aria-label="Change text size" id="btn-textsize">A</button>
+    <button onclick="enterPresentation()" aria-label="Enter presentation mode">Present</button>
+    <button onclick="toggleLegend()" aria-label="Toggle legend">Legend</button>
   </div>
   <div id="svg-container">
-    <svg id="genogram-svg" xmlns="http://www.w3.org/2000/svg">
+    <svg id="genogram-svg" xmlns="http://www.w3.org/2000/svg"
+         role="img" aria-label="Influence genogram diagram" tabindex="0">
       <defs>
         <marker id="arrow-supportive" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#27ae60" stroke-width="1.5"/>
+          <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="var(--c-supportive)" stroke-width="1.5"/>
         </marker>
         <marker id="arrow-restrictive" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 Z" fill="#e74c3c"/>
+          <path d="M 0 0 L 10 5 L 0 10 Z" fill="var(--c-restrictive)"/>
         </marker>
         <marker id="arrow-mixed" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#e67e22" stroke-width="1.5"/>
+          <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="var(--c-mixed)" stroke-width="1.5"/>
         </marker>
         <marker id="arrow-challenging" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#3498db" stroke-width="1.5"/>
+          <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="var(--c-challenging)" stroke-width="1.5"/>
         </marker>
         <marker id="arrow-transformative" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-          <path d="M 2 0 L 5 3 L 8 0 L 10 5 L 8 10 L 5 7 L 2 10 L 0 5 Z" fill="#9b59b6"/>
+          <path d="M 2 0 L 5 3 L 8 0 L 10 5 L 8 10 L 5 7 L 2 10 L 0 5 Z" fill="var(--c-transformative)"/>
         </marker>
       </defs>
     </svg>
   </div>
-  <div id="legend">
+  <div id="present-controls">
+    <button onclick="zoomBy(1.2)" aria-label="Zoom in">＋</button>
+    <button onclick="zoomBy(1/1.2)" aria-label="Zoom out">−</button>
+    <button onclick="resetView()" aria-label="Reset zoom">⟲</button>
+    <button onclick="exitPresentation()" aria-label="Exit presentation mode">Exit</button>
+  </div>
+  <div id="legend" aria-label="Legend">
     <h4>Legend</h4>
     <div class="legend-section">
       <h5>Node Shapes</h5>
-      <div class="legend-row"><svg width="18" height="18"><circle cx="9" cy="9" r="8" fill="#fff" stroke="#333" stroke-width="1.5"/></svg> Family</div>
-      <div class="legend-row"><svg width="18" height="18"><rect x="1" y="1" width="16" height="16" fill="#fff" stroke="#333" stroke-width="1.5"/></svg> Institution / Culture</div>
-      <div class="legend-row"><svg width="18" height="18"><polygon points="9,1 17,9 9,17 1,9" fill="#fff" stroke="#333" stroke-width="1.5"/></svg> Friend / Peer</div>
-      <div class="legend-row"><svg width="18" height="18"><path d="M9 16 C9 16 1 10 1 6 C1 3 3 1 5.5 1 C7 1 8 2 9 3.5 C10 2 11 1 12.5 1 C15 1 17 3 17 6 C17 10 9 16 9 16Z" fill="#fff" stroke="#333" stroke-width="1.2"/></svg> Partner</div>
-      <div class="legend-row"><svg width="18" height="18"><polygon points="9,0 11.5,6 18,6.5 13,11 14.5,18 9,14 3.5,18 5,11 0,6.5 6.5,6" fill="#fff" stroke="#333" stroke-width="1"/></svg> Self-Realization</div>
+      <div class="legend-row"><svg width="18" height="18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="#fff" stroke="#333" stroke-width="1.5"/></svg> Family</div>
+      <div class="legend-row"><svg width="18" height="18" aria-hidden="true"><rect x="1" y="1" width="16" height="16" fill="#fff" stroke="#333" stroke-width="1.5"/></svg> Institution / Culture</div>
+      <div class="legend-row"><svg width="18" height="18" aria-hidden="true"><polygon points="9,1 17,9 9,17 1,9" fill="#fff" stroke="#333" stroke-width="1.5"/></svg> Friend / Peer</div>
+      <div class="legend-row"><svg width="18" height="18" aria-hidden="true"><path d="M9 16 C9 16 1 10 1 6 C1 3 3 1 5.5 1 C7 1 8 2 9 3.5 C10 2 11 1 12.5 1 C15 1 17 3 17 6 C17 10 9 16 9 16Z" fill="#fff" stroke="#333" stroke-width="1.2"/></svg> Partner</div>
+      <div class="legend-row"><svg width="18" height="18" aria-hidden="true"><polygon points="9,0 11.5,6 18,6.5 13,11 14.5,18 9,14 3.5,18 5,11 0,6.5 6.5,6" fill="#fff" stroke="#333" stroke-width="1"/></svg> Self-Realization</div>
     </div>
     <div class="legend-section">
-      <h5>Connection Lines</h5>
-      <div class="legend-row"><div class="legend-line" style="background:#27ae60"></div> Supportive</div>
-      <div class="legend-row"><div class="legend-line" style="background:#e74c3c"></div> Restrictive</div>
-      <div class="legend-row"><div class="legend-line" style="background:#e67e22; background:repeating-linear-gradient(90deg,#e67e22 0 6px,transparent 6px 10px)"></div> Mixed</div>
-      <div class="legend-row"><div class="legend-line" style="background:repeating-linear-gradient(90deg,#3498db 0 3px,transparent 3px 6px)"></div> Challenging</div>
-      <div class="legend-row"><div class="legend-line" style="background:#9b59b6; height:5px"></div> Transformative</div>
+      <h5>Connection Lines (color + style)</h5>
+      <div class="legend-row"><svg width="30" height="6" aria-hidden="true"><line x1="0" y1="3" x2="30" y2="3" stroke="var(--c-supportive)" stroke-width="2"/></svg> Supportive (solid)</div>
+      <div class="legend-row"><svg width="30" height="6" aria-hidden="true"><line x1="0" y1="3" x2="30" y2="3" stroke="var(--c-restrictive)" stroke-width="2"/></svg> Restrictive (solid + filled arrow)</div>
+      <div class="legend-row"><svg width="30" height="6" aria-hidden="true"><line x1="0" y1="3" x2="30" y2="3" stroke="var(--c-mixed)" stroke-width="2" stroke-dasharray="6,3"/></svg> Mixed (long dash)</div>
+      <div class="legend-row"><svg width="30" height="6" aria-hidden="true"><line x1="0" y1="3" x2="30" y2="3" stroke="var(--c-challenging)" stroke-width="2" stroke-dasharray="3,3"/></svg> Challenging (short dash)</div>
+      <div class="legend-row"><svg width="30" height="6" aria-hidden="true"><line x1="0" y1="3" x2="30" y2="3" stroke="var(--c-transformative)" stroke-width="4"/></svg> Transformative (thick)</div>
     </div>
   </div>
-</div>
+</main>
 
-<!-- AI Generation Modal -->
-<div class="modal-backdrop" id="ai-modal">
+<!-- ========================================================== -->
+<!-- AI Generation Modal                                          -->
+<!-- ========================================================== -->
+<div class="modal-backdrop" id="ai-modal" role="dialog" aria-modal="true" aria-labelledby="ai-modal-title">
   <div class="modal">
     <div class="modal-header">
-      <h2>✨ Generate Genogram from Text</h2>
-      <button class="modal-close" onclick="closeAIModal()">&times;</button>
+      <h2 id="ai-modal-title">✨ Generate Genogram from Text</h2>
+      <button class="modal-close" onclick="closeAIModal()" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
-      <label>Anthropic API Key</label>
+      <label for="ai-api-key">Anthropic API Key</label>
       <input type="password" id="ai-api-key" placeholder="sk-ant-...">
       <div class="hint">
         Stored only in your browser (localStorage). Get a key at
-        <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a>.
+        <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
       </div>
 
-      <label style="margin-top:12px">Model</label>
+      <label for="ai-model" style="margin-top:12px">Model</label>
       <select id="ai-model">
         <option value="claude-sonnet-4-5">Claude Sonnet 4.5 (recommended)</option>
         <option value="claude-opus-4-5">Claude Opus 4.5 (deeper analysis)</option>
         <option value="claude-haiku-4-5">Claude Haiku 4.5 (fastest/cheapest)</option>
       </select>
 
-      <label style="margin-top:12px">Narrative / Transcript</label>
+      <label for="ai-narrative" style="margin-top:12px">Narrative / Transcript</label>
       <textarea id="ai-narrative" placeholder="Paste a transcript or write a narrative about the people, institutions, and cultural forces that shaped your sexuality and worldview across your life..."></textarea>
       <div class="hint">
         Claude will extract influences and relationships and build the graph. Works best with rich, specific stories that mention who/what influenced you, when (childhood/teens/college/adulthood), and how (supportive, restrictive, etc.).
@@ -301,7 +465,7 @@
         Merge with existing graph (otherwise replaces it)
       </label>
 
-      <div id="ai-status"></div>
+      <div id="ai-status" aria-live="polite"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeAIModal()">Cancel</button>
@@ -310,31 +474,144 @@
   </div>
 </div>
 
+<!-- ========================================================== -->
+<!-- Profiles Modal                                                -->
+<!-- ========================================================== -->
+<div class="modal-backdrop" id="profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="profile-modal-title">👤 Profiles</h2>
+      <button class="modal-close" onclick="closeProfileModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="hint" style="margin-bottom:12px">
+        <em>Profiles are encrypted and stored locally in this browser only. We don't have access to your data or your password — losing the password means losing the profile.</em>
+      </div>
+
+      <div class="section-title">Existing profiles</div>
+      <div id="profile-list"></div>
+
+      <div class="section-title" style="margin-top:18px">Create new profile</div>
+      <label for="new-profile-name">Profile name</label>
+      <input type="text" id="new-profile-name" placeholder="e.g. Alice">
+      <div class="row" style="margin-top:8px">
+        <div>
+          <label for="new-profile-pw">Password</label>
+          <input type="password" id="new-profile-pw">
+        </div>
+        <div>
+          <label for="new-profile-pw2">Confirm</label>
+          <input type="password" id="new-profile-pw2">
+        </div>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="createProfile()">Create &amp; load empty</button>
+      </div>
+
+      <div id="profile-status" aria-live="polite"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeProfileModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================== -->
+<!-- Written Statement Modal                                       -->
+<!-- ========================================================== -->
+<div class="modal-backdrop" id="statement-modal" role="dialog" aria-modal="true" aria-labelledby="statement-modal-title">
+  <div class="modal" style="width:760px">
+    <div class="modal-header">
+      <h2 id="statement-modal-title">📝 Written Statement</h2>
+      <button class="modal-close" onclick="closeStatementModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="hint">
+        Claude will read your current genogram and write a 3–5 paragraph reflective essay explaining the structure, the patterns visible across life periods, and what it suggests about your worldview. Uses your Anthropic API key (set in Generate from Text).
+      </div>
+      <div id="statement-output" style="margin-top:12px">Click <strong>Generate</strong> to write a statement based on your current genogram.</div>
+      <div id="statement-status" aria-live="polite"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeStatementModal()">Close</button>
+      <button class="btn btn-secondary" id="statement-copy-btn" onclick="copyStatement()" style="display:none">Copy</button>
+      <button class="btn btn-secondary" id="statement-dl-txt-btn" onclick="downloadStatement('txt')" style="display:none">Download .txt</button>
+      <button class="btn btn-secondary" id="statement-dl-md-btn" onclick="downloadStatement('md')" style="display:none">Download .md</button>
+      <button class="btn btn-primary" id="statement-gen-btn" onclick="generateStatement()">Generate</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================== -->
+<!-- Profile unlock modal                                          -->
+<!-- ========================================================== -->
+<div class="modal-backdrop" id="unlock-modal" role="dialog" aria-modal="true" aria-labelledby="unlock-modal-title">
+  <div class="modal" style="width:420px">
+    <div class="modal-header">
+      <h2 id="unlock-modal-title">🔒 Unlock Profile</h2>
+      <button class="modal-close" onclick="closeUnlockModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="unlock-prompt" style="font-size:14px; margin-bottom:10px"></div>
+      <label for="unlock-pw">Password</label>
+      <input type="password" id="unlock-pw" autofocus onkeydown="if(event.key==='Enter')confirmUnlock()">
+      <div id="unlock-status" aria-live="polite"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeUnlockModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmUnlock()">Unlock</button>
+    </div>
+  </div>
+</div>
+
 <script>
+// ===========================================================
+// State
+// ===========================================================
 let nodes = [];
 let connections = [];
 let nextNodeId = 1;
 let nextConnId = 1;
 let selectedNodeId = null;
 let selectedConnId = null;
+let activeProfile = null;   // currently loaded profile name
+let activeProfileKey = null; // CryptoKey for re-saving
+let dirty = false;          // unsaved changes flag
 
 const PERIODS = ['childhood', 'teens', 'college', 'adulthood'];
-const PERIOD_LABELS = { childhood: 'Childhood', teens: 'Teens', college: 'College / YA', adulthood: 'Adulthood' };
-const CONN_STYLES = {
-  supportive:     { color: '#27ae60', dash: '',    width: 2 },
-  restrictive:    { color: '#e74c3c', dash: '',    width: 2 },
-  mixed:          { color: '#e67e22', dash: '8,4', width: 2 },
-  challenging:    { color: '#3498db', dash: '4,4', width: 2 },
-  transformative: { color: '#9b59b6', dash: '',    width: 4 },
-};
-const NATURE_COLORS = {
-  supportive: '#27ae60', restrictive: '#e74c3c', mixed: '#e67e22',
-  challenging: '#3498db', transformative: '#9b59b6',
+const PERIOD_LABELS = {
+  childhood: 'Childhood', teens: 'Teens',
+  college: 'College / Young Adult', adulthood: 'Adulthood'
 };
 
-nodes.push({ id: 0, name: 'You', type: 'realization', period: 'adulthood', desc: 'Yourself — the center of this genogram.' });
+// CSS variable accessor — palette-aware
+function cssVar(name) {
+  return getComputedStyle(document.body).getPropertyValue(name).trim();
+}
+function natureColor(nature) {
+  return cssVar('--c-' + nature) || '#999';
+}
+function natureStyle(nature) {
+  const styles = {
+    supportive:     { dash: '',    width: 2 },
+    restrictive:    { dash: '',    width: 2 },
+    mixed:          { dash: '8,4', width: 2 },
+    challenging:    { dash: '4,4', width: 2 },
+    transformative: { dash: '',    width: 4 },
+  };
+  const s = styles[nature] || styles.supportive;
+  return { color: natureColor(nature), ...s };
+}
 
-// ---- Node ----
+// Initial "You" node
+nodes.push({
+  id: 0, name: 'You', type: 'realization', period: 'adulthood',
+  desc: 'Yourself — the center of this genogram.'
+});
+
+// ===========================================================
+// Node CRUD
+// ===========================================================
 function selectNode(id) {
   selectedNodeId = id;
   selectedConnId = null;
@@ -350,13 +627,7 @@ function selectNode(id) {
   document.getElementById('btn-node-cancel').style.display = '';
   refreshAll();
 }
-
-function deselectNode() {
-  selectedNodeId = null;
-  clearNodeForm();
-  refreshAll();
-}
-
+function deselectNode() { selectedNodeId = null; clearNodeForm(); refreshAll(); }
 function clearNodeForm() {
   document.getElementById('node-name').value = '';
   document.getElementById('node-type').value = 'family';
@@ -367,14 +638,12 @@ function clearNodeForm() {
   document.getElementById('btn-node-delete').style.display = 'none';
   document.getElementById('btn-node-cancel').style.display = 'none';
 }
-
 function saveNode() {
   const name = document.getElementById('node-name').value.trim();
   if (!name) return alert('Please enter a name.');
   const type = document.getElementById('node-type').value;
   const period = document.getElementById('node-period').value;
   const desc = document.getElementById('node-desc').value.trim();
-
   if (selectedNodeId !== null) {
     const node = nodes.find(n => n.id === selectedNodeId);
     if (node) { node.name = name; node.type = type; node.period = period; node.desc = desc; }
@@ -383,18 +652,21 @@ function saveNode() {
     nodes.push({ id: nextNodeId++, name, type, period, desc });
     clearNodeForm();
   }
+  markDirty();
   refreshAll();
 }
-
 function deleteNode() {
   if (selectedNodeId === null || selectedNodeId === 0) return;
   nodes = nodes.filter(n => n.id !== selectedNodeId);
   connections = connections.filter(c => c.from !== selectedNodeId && c.to !== selectedNodeId);
   deselectNode();
+  markDirty();
   refreshAll();
 }
 
-// ---- Connection ----
+// ===========================================================
+// Connection CRUD
+// ===========================================================
 function selectConn(id) {
   selectedConnId = id;
   selectedNodeId = null;
@@ -407,19 +679,14 @@ function selectConn(id) {
   document.getElementById('conn-label').value = conn.label || '';
   const from = nodes.find(n => n.id === conn.from);
   const to = nodes.find(n => n.id === conn.to);
-  document.getElementById('conn-section-title').textContent = 'Editing: ' + (from ? from.name : '?') + ' \u2192 ' + (to ? to.name : '?');
+  document.getElementById('conn-section-title').textContent =
+    'Editing: ' + (from ? from.name : '?') + ' \u2192 ' + (to ? to.name : '?');
   document.getElementById('btn-conn-save').textContent = 'Save';
   document.getElementById('btn-conn-delete').style.display = '';
   document.getElementById('btn-conn-cancel').style.display = '';
   refreshAll();
 }
-
-function deselectConn() {
-  selectedConnId = null;
-  clearConnForm();
-  refreshAll();
-}
-
+function deselectConn() { selectedConnId = null; clearConnForm(); refreshAll(); }
 function clearConnForm() {
   document.getElementById('conn-label').value = '';
   document.getElementById('conn-nature').value = 'supportive';
@@ -428,7 +695,6 @@ function clearConnForm() {
   document.getElementById('btn-conn-delete').style.display = 'none';
   document.getElementById('btn-conn-cancel').style.display = 'none';
 }
-
 function saveConnection() {
   const from = parseInt(document.getElementById('conn-from').value);
   const to = parseInt(document.getElementById('conn-to').value);
@@ -436,7 +702,6 @@ function saveConnection() {
   if (from === to) return alert('Source and target must be different.');
   const nature = document.getElementById('conn-nature').value;
   const label = document.getElementById('conn-label').value.trim();
-
   if (selectedConnId !== null) {
     const conn = connections.find(c => c.id === selectedConnId);
     if (conn) { conn.from = from; conn.to = to; conn.nature = nature; conn.label = label; }
@@ -445,71 +710,104 @@ function saveConnection() {
     connections.push({ id: nextConnId++, from, to, nature, label });
     clearConnForm();
   }
+  markDirty();
   refreshAll();
 }
-
 function deleteConnection() {
   if (selectedConnId === null) return;
   connections = connections.filter(c => c.id !== selectedConnId);
   deselectConn();
+  markDirty();
   refreshAll();
 }
 
-// ---- Refresh ----
+function markDirty() { dirty = true; updateActiveProfileLabel(); }
+
+// ===========================================================
+// Refresh
+// ===========================================================
 function refreshAll() {
   renderNodeList();
   renderConnList();
+  renderSRTables();
   populateConnSelectors();
   renderSVG();
 }
-
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
 function renderNodeList() {
   const list = document.getElementById('node-list');
   list.innerHTML = nodes.map(n =>
-    `<div class="item${selectedNodeId === n.id ? ' selected' : ''}" onclick="selectNode(${n.id})">
-      <span>${n.name}</span>
-      <span class="badge">${n.type} &middot; ${PERIOD_LABELS[n.period] || n.period}</span>
+    `<div class="item${selectedNodeId === n.id ? ' selected' : ''}" role="listitem"
+          tabindex="0" onclick="selectNode(${n.id})"
+          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectNode(${n.id});}">
+      <span>${escapeHtml(n.name)}</span>
+      <span class="badge">${escapeHtml(n.type)} &middot; ${escapeHtml(PERIOD_LABELS[n.period] || n.period)}</span>
     </div>`
   ).join('');
 }
-
 function renderConnList() {
   const list = document.getElementById('conn-list');
   list.innerHTML = connections.map(c => {
     const from = nodes.find(n => n.id === c.from);
     const to = nodes.find(n => n.id === c.to);
-    const bg = NATURE_COLORS[c.nature] || '#999';
-    return `<div class="item${selectedConnId === c.id ? ' selected' : ''}" onclick="selectConn(${c.id})">
-      <span>${from ? from.name : '?'} &rarr; ${to ? to.name : '?'}</span>
-      <span class="conn-badge" style="background:${bg}">${c.nature}</span>
+    const bg = natureColor(c.nature);
+    return `<div class="item${selectedConnId === c.id ? ' selected' : ''}" role="listitem"
+                 tabindex="0" onclick="selectConn(${c.id})"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectConn(${c.id});}">
+      <span>${escapeHtml(from ? from.name : '?')} &rarr; ${escapeHtml(to ? to.name : '?')}</span>
+      <span class="conn-badge" style="background:${bg}">${escapeHtml(c.nature)}</span>
     </div>`;
   }).join('');
 }
-
+function renderSRTables() {
+  const ntb = document.querySelector('#sr-nodes-table tbody');
+  ntb.innerHTML = nodes.map(n =>
+    `<tr><td>${escapeHtml(n.name)}</td><td>${escapeHtml(n.type)}</td>
+     <td>${escapeHtml(PERIOD_LABELS[n.period] || n.period)}</td>
+     <td>${escapeHtml(n.desc || '')}</td></tr>`
+  ).join('');
+  const ctb = document.querySelector('#sr-conns-table tbody');
+  ctb.innerHTML = connections.map(c => {
+    const from = nodes.find(n => n.id === c.from);
+    const to = nodes.find(n => n.id === c.to);
+    return `<tr><td>${escapeHtml(from ? from.name : '?')}</td>
+     <td>${escapeHtml(to ? to.name : '?')}</td>
+     <td>${escapeHtml(c.nature)}</td>
+     <td>${escapeHtml(c.label || '')}</td></tr>`;
+  }).join('');
+}
 function populateConnSelectors() {
   const fromVal = document.getElementById('conn-from').value;
   const toVal = document.getElementById('conn-to').value;
-  const opts = nodes.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
+  const opts = nodes.map(n => `<option value="${n.id}">${escapeHtml(n.name)}</option>`).join('');
   document.getElementById('conn-from').innerHTML = opts;
   document.getElementById('conn-to').innerHTML = opts;
   if (fromVal) document.getElementById('conn-from').value = fromVal;
   if (toVal) document.getElementById('conn-to').value = toVal;
 }
 
-// ---- SVG ----
-const NODE_W = 120, NODE_H = 60, ROW_GAP = 120, COL_GAP = 40, PADDING = 60;
+// ===========================================================
+// SVG Rendering
+// ===========================================================
+function getNodeDims() {
+  return { w: parseFloat(cssVar('--node-w')) || 120, h: parseFloat(cssVar('--node-h')) || 60 };
+}
+const ROW_GAP = 160, COL_GAP = 60, PADDING = 60;
 
-function getNodeShape(type) {
-  const hw = NODE_W / 2, hh = NODE_H / 2, stroke = '#333';
+function getNodeShape(type, w, h) {
+  const hw = w / 2, hh = h / 2, stroke = '#222';
   switch (type) {
     case 'family':
-      return `<ellipse cx="0" cy="0" rx="${hw}" ry="${hh}" fill="#fff" stroke="${stroke}" stroke-width="2"/>`;
+      return `<ellipse cx="0" cy="0" rx="${hw}" ry="${hh}" fill="#fff" stroke="${stroke}" stroke-width="2.5"/>`;
     case 'institution': case 'media':
-      return `<rect x="${-hw}" y="${-hh}" width="${NODE_W}" height="${NODE_H}" fill="#fff" stroke="${stroke}" stroke-width="2" rx="4"/>`;
+      return `<rect x="${-hw}" y="${-hh}" width="${w}" height="${h}" fill="#fff" stroke="${stroke}" stroke-width="2.5" rx="4"/>`;
     case 'friend':
-      return `<polygon points="0,${-hh} ${hw},0 0,${hh} ${-hw},0" fill="#fff" stroke="${stroke}" stroke-width="2"/>`;
+      return `<polygon points="0,${-hh} ${hw},0 0,${hh} ${-hw},0" fill="#fff" stroke="${stroke}" stroke-width="2.5"/>`;
     case 'partner':
-      return `<path d="M0 ${hh*0.8} C0 ${hh*0.8} ${-hw} ${hh*0.1} ${-hw} ${-hh*0.3} C${-hw} ${-hh*0.8} ${-hw*0.5} ${-hh} ${-hw*0.15} ${-hh} C${-hw*0.05} ${-hh} 0 ${-hh*0.7} 0 ${-hh*0.35} C0 ${-hh*0.7} ${hw*0.05} ${-hh} ${hw*0.15} ${-hh} C${hw*0.5} ${-hh} ${hw} ${-hh*0.8} ${hw} ${-hh*0.3} C${hw} ${hh*0.1} 0 ${hh*0.8} 0 ${hh*0.8}Z" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>`;
+      return `<path d="M0 ${hh*0.8} C0 ${hh*0.8} ${-hw} ${hh*0.1} ${-hw} ${-hh*0.3} C${-hw} ${-hh*0.8} ${-hw*0.5} ${-hh} ${-hw*0.15} ${-hh} C${-hw*0.05} ${-hh} 0 ${-hh*0.7} 0 ${-hh*0.35} C0 ${-hh*0.7} ${hw*0.05} ${-hh} ${hw*0.15} ${-hh} C${hw*0.5} ${-hh} ${hw} ${-hh*0.8} ${hw} ${-hh*0.3} C${hw} ${hh*0.1} 0 ${hh*0.8} 0 ${hh*0.8}Z" fill="#fff" stroke="${stroke}" stroke-width="2"/>`;
     case 'realization': {
       const pts = [];
       for (let i = 0; i < 10; i++) {
@@ -517,73 +815,126 @@ function getNodeShape(type) {
         const angle = Math.PI / 2 + i * Math.PI / 5;
         pts.push(`${-Math.cos(angle)*r},${-Math.sin(angle)*r}`);
       }
-      return `<polygon points="${pts.join(' ')}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>`;
+      return `<polygon points="${pts.join(' ')}" fill="#fff" stroke="${stroke}" stroke-width="2"/>`;
     }
     default:
-      return `<circle cx="0" cy="0" r="${hh}" fill="#fff" stroke="${stroke}" stroke-width="2"/>`;
+      return `<circle cx="0" cy="0" r="${hh}" fill="#fff" stroke="${stroke}" stroke-width="2.5"/>`;
   }
 }
 
 function layoutNodes() {
+  const { w: NW, h: NH } = getNodeDims();
   const groups = {};
   PERIODS.forEach(p => groups[p] = []);
   nodes.forEach(n => { if (!groups[n.period]) groups[n.period] = []; groups[n.period].push(n); });
   let maxWidth = 0;
   PERIODS.forEach(p => {
-    const rw = groups[p].length * (NODE_W + COL_GAP) - COL_GAP;
+    const rw = groups[p].length * (NW + COL_GAP) - COL_GAP;
     if (rw > maxWidth) maxWidth = rw;
   });
   const positions = {};
   PERIODS.forEach((period, ri) => {
     const g = groups[period];
-    const rw = g.length * (NODE_W + COL_GAP) - COL_GAP;
-    const sx = PADDING + (maxWidth - rw) / 2 + NODE_W / 2;
-    const y = PADDING + 30 + ri * (NODE_H + ROW_GAP) + NODE_H / 2;
-    g.forEach((n, i) => { positions[n.id] = { x: sx + i * (NODE_W + COL_GAP), y }; });
+    const rw = g.length * (NW + COL_GAP) - COL_GAP;
+    const sx = PADDING + (maxWidth - rw) / 2 + NW / 2;
+    const y = PADDING + 30 + ri * (NH + ROW_GAP) + NH / 2;
+    g.forEach((n, i) => { positions[n.id] = { x: sx + i * (NW + COL_GAP), y }; });
   });
-  return { positions, width: maxWidth + PADDING * 2, height: PADDING * 2 + 30 + PERIODS.length * (NODE_H + ROW_GAP) };
+  return {
+    positions,
+    width: maxWidth + PADDING * 2,
+    height: PADDING * 2 + 30 + PERIODS.length * (NH + ROW_GAP)
+  };
+}
+
+// View transform for presentation pan/zoom
+let viewTransform = { x: 0, y: 0, scale: 1 };
+function applyViewTransform() {
+  const vp = document.getElementById('viewport-g');
+  if (vp) vp.setAttribute('transform',
+    `translate(${viewTransform.x},${viewTransform.y}) scale(${viewTransform.scale})`);
+}
+function zoomBy(factor) {
+  viewTransform.scale *= factor;
+  applyViewTransform();
+}
+function resetView() {
+  viewTransform = { x: 0, y: 0, scale: 1 };
+  applyViewTransform();
 }
 
 function renderSVG() {
   const svg = document.getElementById('genogram-svg');
   const { positions, width, height } = layoutNodes();
+  const { w: NW, h: NH } = getNodeDims();
   svg.setAttribute('viewBox', `0 0 ${Math.max(width, 600)} ${Math.max(height, 400)}`);
+
+  // Keep <defs>, clear the rest
   const defs = svg.querySelector('defs').outerHTML;
   svg.innerHTML = defs;
 
+  // Wrap content in viewport group for pan/zoom
+  const viewport = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  viewport.setAttribute('id', 'viewport-g');
+  svg.appendChild(viewport);
+
+  // Period rows / dividers / labels
   PERIODS.forEach((period, ri) => {
-    const y = PADDING + 15 + ri * (NODE_H + ROW_GAP);
+    const y = PADDING + 15 + ri * (NH + ROW_GAP);
     const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     lbl.setAttribute('x', '12'); lbl.setAttribute('y', y);
-    lbl.setAttribute('font-size', '13'); lbl.setAttribute('font-weight', '600'); lbl.setAttribute('fill', '#999');
+    lbl.setAttribute('font-size', '14');
+    lbl.setAttribute('font-weight', '700');
+    lbl.setAttribute('fill', '#888');
+    lbl.setAttribute('letter-spacing', '0.5');
     lbl.textContent = (PERIOD_LABELS[period] || period).toUpperCase();
-    svg.appendChild(lbl);
+    viewport.appendChild(lbl);
     if (ri > 0) {
       const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       ln.setAttribute('x1', '0'); ln.setAttribute('x2', Math.max(width, 600));
       ln.setAttribute('y1', y - ROW_GAP / 2 + 15); ln.setAttribute('y2', y - ROW_GAP / 2 + 15);
-      ln.setAttribute('stroke', '#eee'); ln.setAttribute('stroke-width', '1');
-      svg.appendChild(ln);
+      ln.setAttribute('stroke', '#e5e5e5'); ln.setAttribute('stroke-width', '1');
+      viewport.appendChild(ln);
     }
   });
 
+  // Connections
   connections.forEach(conn => {
     const fp = positions[conn.from], tp = positions[conn.to];
     if (!fp || !tp) return;
-    const style = CONN_STYLES[conn.nature] || CONN_STYLES.supportive;
+    const style = natureStyle(conn.nature);
+    const fromName = (nodes.find(n => n.id === conn.from) || {}).name || '?';
+    const toName = (nodes.find(n => n.id === conn.to) || {}).name || '?';
+
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', 'conn-group');
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('role', 'button');
+    g.setAttribute('aria-label',
+      `Connection: ${fromName} influences ${toName}, nature ${conn.nature}${conn.label ? ', ' + conn.label : ''}. Press Enter to edit.`);
     g.style.cursor = 'pointer';
+    g.dataset.connId = conn.id;
     g.onclick = (e) => { e.stopPropagation(); selectConn(conn.id); };
+    g.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectConn(conn.id); }
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault(); selectConn(conn.id); deleteConnection();
+      }
+    };
+    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    title.textContent = `${fromName} → ${toName} (${conn.nature})${conn.label ? ': ' + conn.label : ''}`;
+    g.appendChild(title);
 
     const dx = tp.x - fp.x, dy = tp.y - fp.y, dist = Math.sqrt(dx*dx + dy*dy);
     if (dist === 0) return;
-    const nx = dx/dist, ny = dy/dist, off = NODE_W/2 + 4;
+    const nx = dx/dist, ny = dy/dist, off = Math.max(NW, NH)/2 + 4;
     const x1 = fp.x + nx*off, y1 = fp.y + ny*off, x2 = tp.x - nx*off, y2 = tp.y - ny*off;
 
+    // Hit area (transparent thick line)
     const hit = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     hit.setAttribute('x1', x1); hit.setAttribute('y1', y1);
     hit.setAttribute('x2', x2); hit.setAttribute('y2', y2);
-    hit.setAttribute('stroke', 'transparent'); hit.setAttribute('stroke-width', '12');
+    hit.setAttribute('stroke', 'transparent'); hit.setAttribute('stroke-width', '14');
     g.appendChild(hit);
 
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -600,176 +951,199 @@ function renderSVG() {
 
     if (conn.label) {
       const mx = (x1+x2)/2, my = (y1+y2)/2;
+      // background pill
+      const padding = 3;
+      const approxW = conn.label.length * 6.5 + padding * 2;
+      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bg.setAttribute('x', mx - approxW/2);
+      bg.setAttribute('y', my - 14);
+      bg.setAttribute('width', approxW);
+      bg.setAttribute('height', 14);
+      bg.setAttribute('rx', '3');
+      bg.setAttribute('fill', 'rgba(255,255,255,0.92)');
+      g.appendChild(bg);
       const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       t.setAttribute('x', mx); t.setAttribute('y', my - 4);
       t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '11');
-      t.setAttribute('fill', style.color); t.setAttribute('font-weight', '500');
+      t.setAttribute('fill', style.color); t.setAttribute('font-weight', '600');
       t.textContent = conn.label;
       g.appendChild(t);
     }
-    svg.appendChild(g);
+    viewport.appendChild(g);
   });
 
-  // Collect label bounding boxes for collision avoidance
+  // Nodes + notes
   const labelBoxes = [];
+  const nodeFontSize = parseFloat(cssVar('--node-font-size')) || 13;
+  const noteFontSize = parseFloat(cssVar('--note-font-size')) || 10;
 
   nodes.forEach(node => {
     const pos = positions[node.id];
     if (!pos) return;
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
-    g.style.cursor = 'pointer';
-    g.onclick = (e) => { e.stopPropagation(); selectNode(node.id); };
+    const periodLbl = PERIOD_LABELS[node.period] || node.period;
+    const ariaLabel = `${node.name}, ${node.type}, ${periodLbl}${node.desc ? ': ' + node.desc : ''}. Press Enter to edit.`;
 
-    if (selectedNodeId === node.id) {
-      const h = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      h.setAttribute('cx', '0'); h.setAttribute('cy', '0'); h.setAttribute('r', NODE_W/2 + 6);
-      h.setAttribute('fill', 'none'); h.setAttribute('stroke', '#4a90d9');
-      h.setAttribute('stroke-width', '2'); h.setAttribute('stroke-dasharray', '4,3');
-      g.appendChild(h);
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', 'node-group');
+    g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('role', 'button');
+    g.setAttribute('aria-label', ariaLabel);
+    g.style.cursor = 'pointer';
+    g.dataset.nodeId = node.id;
+    g.onclick = (e) => { e.stopPropagation(); selectNode(node.id); };
+    g.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectNode(node.id); }
+      else if ((e.key === 'Delete' || e.key === 'Backspace') && node.id !== 0) {
+        e.preventDefault(); selectNode(node.id); deleteNode();
+      }
+    };
+    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    title.textContent = `${node.name} — ${node.type}, ${periodLbl}`;
+    g.appendChild(title);
+    if (node.desc) {
+      const desc = document.createElementNS('http://www.w3.org/2000/svg', 'desc');
+      desc.textContent = node.desc;
+      g.appendChild(desc);
     }
 
-    g.innerHTML += getNodeShape(node.type);
-    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    text.setAttribute('x', '0'); text.setAttribute('y', '4');
-    text.setAttribute('text-anchor', 'middle'); text.setAttribute('font-size', '13');
-    text.setAttribute('font-weight', '600'); text.setAttribute('fill', '#333');
-    text.textContent = node.name.length > 14 ? node.name.slice(0, 13) + '\u2026' : node.name;
-    g.appendChild(text);
-    svg.appendChild(g);
+    // Selection halo
+    if (selectedNodeId === node.id) {
+      const h = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      h.setAttribute('cx', '0'); h.setAttribute('cy', '0');
+      h.setAttribute('r', Math.max(NW, NH)/2 + 8);
+      h.setAttribute('fill', 'none'); h.setAttribute('stroke', cssVar('--c-accent'));
+      h.setAttribute('stroke-width', '2.5'); h.setAttribute('stroke-dasharray', '5,3');
+      g.appendChild(h);
+    }
+    // Keyboard focus ring (always present, shown via CSS only when focused)
+    const focusRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    focusRing.setAttribute('class', 'focus-ring');
+    focusRing.setAttribute('cx', '0'); focusRing.setAttribute('cy', '0');
+    focusRing.setAttribute('r', Math.max(NW, NH)/2 + 12);
+    focusRing.setAttribute('fill', 'none');
+    focusRing.setAttribute('stroke', cssVar('--c-accent'));
+    focusRing.setAttribute('stroke-width', '3');
+    g.appendChild(focusRing);
 
-    // Render notes next to node (skip "You" node)
+    g.innerHTML += getNodeShape(node.type, NW, NH);
+
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', '0'); text.setAttribute('y', '5');
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('font-size', nodeFontSize);
+    text.setAttribute('font-weight', '700');
+    text.setAttribute('fill', '#222');
+    const maxChars = Math.floor(NW / (nodeFontSize * 0.55));
+    text.textContent = node.name.length > maxChars
+      ? node.name.slice(0, maxChars - 1) + '\u2026' : node.name;
+    g.appendChild(text);
+
+    viewport.appendChild(g);
+
+    // Notes (skip "You")
     if (node.id !== 0 && node.desc) {
-      const NOTE_MAX_W = 120;
-      const NOTE_FONT = 10;
-      const NOTE_LINE_H = 13;
-      // Word-wrap the description
+      const NOTE_MAX_W = 140;
+      const NOTE_LINE_H = noteFontSize * 1.3;
       const words = node.desc.split(/\s+/);
       const lines = [];
       let cur = '';
       words.forEach(w => {
         const test = cur ? cur + ' ' + w : w;
-        if (test.length * NOTE_FONT * 0.55 > NOTE_MAX_W && cur) {
-          lines.push(cur);
-          cur = w;
-        } else {
-          cur = test;
-        }
+        if (test.length * noteFontSize * 0.55 > NOTE_MAX_W && cur) {
+          lines.push(cur); cur = w;
+        } else { cur = test; }
       });
       if (cur) lines.push(cur);
-      // Cap at 5 lines
-      if (lines.length > 5) { lines.length = 5; lines[4] = lines[4].slice(0, -1) + '\u2026'; }
+      if (lines.length > 6) { lines.length = 6; lines[5] = lines[5].slice(0, -1) + '\u2026'; }
 
-      const blockH = lines.length * NOTE_LINE_H + 6;
-      const blockW = NOTE_MAX_W + 8;
+      const blockH = lines.length * NOTE_LINE_H + 8;
+      const blockW = NOTE_MAX_W + 10;
 
-      // Try 4 positions: right, left, below-right, below-left
+      // 8 candidate positions around the node
+      const offX = NW/2 + 14, offY = NH/2 + 6;
       const candidates = [
-        { x: pos.x + NODE_W/2 + 10, y: pos.y - blockH/2, anchor: 'start' },
-        { x: pos.x - NODE_W/2 - 10 - blockW, y: pos.y - blockH/2, anchor: 'start' },
-        { x: pos.x + NODE_W/2 + 10, y: pos.y + NODE_H/2 + 4, anchor: 'start' },
-        { x: pos.x - NODE_W/2 - 10 - blockW, y: pos.y + NODE_H/2 + 4, anchor: 'start' },
+        { x: pos.x + offX,                y: pos.y - blockH/2 }, // right
+        { x: pos.x - offX - blockW,       y: pos.y - blockH/2 }, // left
+        { x: pos.x - blockW/2,            y: pos.y + offY }, // below center
+        { x: pos.x - blockW/2,            y: pos.y - offY - blockH }, // above center
+        { x: pos.x + offX,                y: pos.y + offY }, // below-right
+        { x: pos.x - offX - blockW,       y: pos.y + offY }, // below-left
+        { x: pos.x + offX,                y: pos.y - offY - blockH }, // above-right
+        { x: pos.x - offX - blockW,       y: pos.y - offY - blockH }, // above-left
       ];
 
       function boxOverlaps(bx, by) {
         for (const lb of labelBoxes) {
-          if (bx < lb.x + lb.w && bx + blockW > lb.x && by < lb.y + lb.h && by + blockH > lb.y) return true;
+          if (bx < lb.x + lb.w && bx + blockW > lb.x &&
+              by < lb.y + lb.h && by + blockH > lb.y) return true;
         }
-        // Also avoid overlapping nodes
         for (const n of nodes) {
-          const np = positions[n.id];
-          if (!np) continue;
-          const nx1 = np.x - NODE_W/2 - 4, ny1 = np.y - NODE_H/2 - 4;
-          const nx2 = np.x + NODE_W/2 + 4, ny2 = np.y + NODE_H/2 + 4;
+          const np = positions[n.id]; if (!np) continue;
+          const nx1 = np.x - NW/2 - 6, ny1 = np.y - NH/2 - 6;
+          const nx2 = np.x + NW/2 + 6, ny2 = np.y + NH/2 + 6;
           if (bx < nx2 && bx + blockW > nx1 && by < ny2 && by + blockH > ny1) return true;
         }
         return false;
       }
 
-      let best = candidates[0];
+      let best = null;
       for (const c of candidates) {
         if (!boxOverlaps(c.x, c.y)) { best = c; break; }
       }
-      // If all overlap, nudge downward until clear
-      if (boxOverlaps(best.x, best.y)) {
-        let nudge = 0;
-        while (boxOverlaps(best.x, best.y + nudge) && nudge < 200) nudge += NOTE_LINE_H;
-        best = { ...best, y: best.y + nudge };
+      let useLeader = false;
+      if (!best) {
+        // Search outward in concentric rings for a free spot
+        useLeader = true;
+        const stepR = 30;
+        outer: for (let r = stepR; r < 600; r += stepR) {
+          for (let a = 0; a < 16; a++) {
+            const ang = (a / 16) * Math.PI * 2;
+            const cx = pos.x + Math.cos(ang) * r - blockW/2;
+            const cy = pos.y + Math.sin(ang) * r - blockH/2;
+            if (!boxOverlaps(cx, cy)) { best = { x: cx, y: cy }; break outer; }
+          }
+        }
+        if (!best) best = candidates[0];
       }
 
       labelBoxes.push({ x: best.x, y: best.y, w: blockW, h: blockH });
 
       const ng = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      // Background
+
+      // Leader line if needed
+      if (useLeader) {
+        const ll = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        ll.setAttribute('x1', pos.x); ll.setAttribute('y1', pos.y);
+        ll.setAttribute('x2', best.x + blockW/2); ll.setAttribute('y2', best.y + blockH/2);
+        ll.setAttribute('stroke', '#bbb');
+        ll.setAttribute('stroke-width', '1');
+        ll.setAttribute('stroke-dasharray', '2,2');
+        ng.appendChild(ll);
+      }
+
       const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       bg.setAttribute('x', best.x); bg.setAttribute('y', best.y);
       bg.setAttribute('width', blockW); bg.setAttribute('height', blockH);
-      bg.setAttribute('rx', '3'); bg.setAttribute('fill', 'rgba(255,255,250,0.92)');
-      bg.setAttribute('stroke', '#ddd'); bg.setAttribute('stroke-width', '0.5');
+      bg.setAttribute('rx', '3'); bg.setAttribute('fill', 'rgba(255,255,250,0.95)');
+      bg.setAttribute('stroke', '#ccc'); bg.setAttribute('stroke-width', '0.5');
       ng.appendChild(bg);
 
       lines.forEach((ln, li) => {
         const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        t.setAttribute('x', best.x + 4);
-        t.setAttribute('y', best.y + 12 + li * NOTE_LINE_H);
-        t.setAttribute('font-size', NOTE_FONT);
-        t.setAttribute('fill', '#666');
+        t.setAttribute('x', best.x + 5);
+        t.setAttribute('y', best.y + 4 + (li + 1) * NOTE_LINE_H - NOTE_LINE_H * 0.25);
+        t.setAttribute('font-size', noteFontSize);
+        t.setAttribute('fill', '#555');
         t.setAttribute('font-style', 'italic');
         t.textContent = ln;
         ng.appendChild(t);
       });
-      svg.appendChild(ng);
+      viewport.appendChild(ng);
     }
   });
-}
 
-// ---- Export / Import ----
-function saveAsImage() {
-  const svg = document.getElementById('genogram-svg');
-  const svgData = new XMLSerializer().serializeToString(svg);
-  const canvas = document.createElement('canvas');
-  const vb = svg.getAttribute('viewBox').split(' ').map(Number);
-  canvas.width = vb[2] * 2; canvas.height = vb[3] * 2;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const img = new Image();
-  img.onload = () => {
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    const a = document.createElement('a');
-    a.download = 'genogram.png'; a.href = canvas.toDataURL('image/png'); a.click();
-  };
-  img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
-}
-
-function exportJSON() {
-  const data = JSON.stringify({ nodes, connections, nextNodeId, nextConnId }, null, 2);
-  const a = document.createElement('a');
-  a.download = 'genogram-data.json';
-  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(data);
-  a.click();
-}
-
-function importJSON() { document.getElementById('import-file').click(); }
-function handleImport(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    try {
-      const data = JSON.parse(ev.target.result);
-      nodes = data.nodes || []; connections = data.connections || [];
-      nextNodeId = data.nextNodeId || nodes.length + 1;
-      nextConnId = data.nextConnId || connections.length + 1;
-      refreshAll();
-    } catch (err) { alert('Invalid JSON file.'); }
-  };
-  reader.readAsText(file);
-  e.target.value = '';
-}
-
-function toggleLegend() {
-  const l = document.getElementById('legend');
-  l.style.display = l.style.display === 'none' ? '' : 'none';
+  applyViewTransform();
 }
 
 // Click SVG background to deselect
@@ -778,8 +1152,230 @@ document.getElementById('genogram-svg').addEventListener('click', (e) => {
     deselectNode(); deselectConn();
   }
 });
+// Escape clears selection / closes modals
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    // Close any open modal
+    const open = document.querySelector('.modal-backdrop.open');
+    if (open) { open.classList.remove('open'); return; }
+    if (document.body.classList.contains('presenting')) { exitPresentation(); return; }
+    deselectNode(); deselectConn();
+  }
+});
 
-// ---- AI Generation ----
+// ===========================================================
+// Export / Import (JSON)
+// ===========================================================
+function exportJSON() {
+  const data = JSON.stringify({ nodes, connections, nextNodeId, nextConnId }, null, 2);
+  const a = document.createElement('a');
+  a.download = 'genogram-data.json';
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(data);
+  a.click();
+}
+function importJSON() { document.getElementById('import-file').click(); }
+function handleImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      loadGraphData(data);
+      markDirty();
+    } catch (err) { alert('Invalid JSON file.'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+function loadGraphData(data) {
+  nodes = (data.nodes || []).map(n => ({ ...n }));
+  connections = (data.connections || []).map(c => ({ ...c }));
+  if (!nodes.find(n => n.id === 0)) {
+    nodes.unshift({ id: 0, name: 'You', type: 'realization', period: 'adulthood',
+                    desc: 'Yourself — the center of this genogram.' });
+  }
+  nextNodeId = data.nextNodeId || (Math.max(...nodes.map(n => n.id), 0) + 1);
+  nextConnId = data.nextConnId || (connections.length + 1);
+  selectedNodeId = null; selectedConnId = null;
+  clearNodeForm(); clearConnForm();
+  refreshAll();
+}
+
+// ===========================================================
+// Image Exports (PNG, SVG)
+// ===========================================================
+function svgWithFooter() {
+  // Clone the SVG so we can add a footer without polluting the live view.
+  const orig = document.getElementById('genogram-svg');
+  const clone = orig.cloneNode(true);
+  const vb = orig.getAttribute('viewBox').split(' ').map(Number);
+  const w = vb[2], h = vb[3];
+  const footerH = 24;
+  clone.setAttribute('viewBox', `0 0 ${w} ${h + footerH}`);
+  clone.setAttribute('width', w);
+  clone.setAttribute('height', h + footerH);
+  // Reset viewport transform on the clone so exports show the full graph
+  const vp = clone.querySelector('#viewport-g');
+  if (vp) vp.removeAttribute('transform');
+
+  // Inline the resolved CSS variable values (var() doesn't survive in image export reliably)
+  inlineSVGColors(clone);
+
+  // Footer
+  const ns = 'http://www.w3.org/2000/svg';
+  const fbg = document.createElementNS(ns, 'rect');
+  fbg.setAttribute('x', 0); fbg.setAttribute('y', h);
+  fbg.setAttribute('width', w); fbg.setAttribute('height', footerH);
+  fbg.setAttribute('fill', '#fafafa');
+  clone.appendChild(fbg);
+  const ft = document.createElementNS(ns, 'text');
+  ft.setAttribute('x', w - 12); ft.setAttribute('y', h + 16);
+  ft.setAttribute('text-anchor', 'end');
+  ft.setAttribute('font-size', '11');
+  ft.setAttribute('fill', '#888');
+  ft.setAttribute('font-family', 'Segoe UI, sans-serif');
+  const today = new Date().toISOString().slice(0, 10);
+  const profileLabel = activeProfile ? `${activeProfile} — ` : '';
+  ft.textContent = `Influence Genogram — ${profileLabel}${today}`;
+  clone.appendChild(ft);
+  return { svg: clone, width: w, height: h + footerH };
+}
+function inlineSVGColors(svg) {
+  // Replace var(--c-...) in stroke/fill attributes with computed colors.
+  const all = svg.querySelectorAll('*');
+  all.forEach(el => {
+    ['stroke', 'fill'].forEach(attr => {
+      const v = el.getAttribute(attr);
+      if (v && v.startsWith('var(')) {
+        const m = v.match(/var\((--[a-z0-9-]+)\)/i);
+        if (m) el.setAttribute(attr, cssVar(m[1]) || '#000');
+      }
+    });
+  });
+}
+function saveAsPNG() {
+  const { svg, width, height } = svgWithFooter();
+  const data = new XMLSerializer().serializeToString(svg);
+  const canvas = document.createElement('canvas');
+  const SCALE = 3;
+  canvas.width = width * SCALE; canvas.height = height * SCALE;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const img = new Image();
+  img.onload = () => {
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const a = document.createElement('a');
+    a.download = `genogram${activeProfile ? '-' + activeProfile : ''}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  };
+  img.onerror = () => alert('PNG export failed.');
+  img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(data)));
+}
+function saveAsSVG() {
+  const { svg } = svgWithFooter();
+  // Add XML declaration and namespace for standalone use
+  svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  const data = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+               new XMLSerializer().serializeToString(svg);
+  const blob = new Blob([data], { type: 'image/svg+xml' });
+  const a = document.createElement('a');
+  a.download = `genogram${activeProfile ? '-' + activeProfile : ''}.svg`;
+  a.href = URL.createObjectURL(blob);
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function toggleLegend() {
+  const l = document.getElementById('legend');
+  l.style.display = l.style.display === 'none' ? '' : 'none';
+}
+
+// ===========================================================
+// Palette / Text size toggles
+// ===========================================================
+function togglePalette() {
+  document.body.classList.toggle('cb-safe');
+  const on = document.body.classList.contains('cb-safe');
+  localStorage.setItem('cb-safe', on ? '1' : '0');
+  document.getElementById('btn-palette').textContent = on ? 'Palette ✓' : 'Palette';
+  refreshAll();
+}
+function cycleTextSize() {
+  const states = ['', 'text-large', 'text-xl'];
+  const labels = ['A', 'A+', 'A++'];
+  let cur = states.findIndex(s => s && document.body.classList.contains(s));
+  if (cur < 0) cur = 0;
+  const next = (cur + 1) % states.length;
+  states.forEach(s => s && document.body.classList.remove(s));
+  if (states[next]) document.body.classList.add(states[next]);
+  document.getElementById('btn-textsize').textContent = labels[next];
+  localStorage.setItem('text-size', states[next] || '');
+  refreshAll();
+}
+// Restore prefs
+if (localStorage.getItem('cb-safe') === '1') {
+  document.body.classList.add('cb-safe');
+  document.getElementById('btn-palette').textContent = 'Palette ✓';
+}
+const savedTextSize = localStorage.getItem('text-size');
+if (savedTextSize) {
+  document.body.classList.add(savedTextSize);
+  document.getElementById('btn-textsize').textContent =
+    savedTextSize === 'text-large' ? 'A+' : savedTextSize === 'text-xl' ? 'A++' : 'A';
+}
+
+// ===========================================================
+// Presentation mode + pan/zoom
+// ===========================================================
+function enterPresentation() {
+  document.body.classList.add('presenting');
+  const sc = document.getElementById('svg-container');
+  sc.style.cursor = 'grab';
+  // Try fullscreen
+  if (document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
+}
+function exitPresentation() {
+  document.body.classList.remove('presenting');
+  document.getElementById('svg-container').style.cursor = '';
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+
+// Wheel zoom (only in presentation mode)
+document.getElementById('svg-container').addEventListener('wheel', (e) => {
+  if (!document.body.classList.contains('presenting')) return;
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.1 : 1/1.1;
+  zoomBy(factor);
+}, { passive: false });
+
+// Drag pan (only in presentation mode)
+let panState = null;
+document.getElementById('svg-container').addEventListener('mousedown', (e) => {
+  if (!document.body.classList.contains('presenting')) return;
+  if (e.button !== 0) return;
+  panState = { x: e.clientX, y: e.clientY, vx: viewTransform.x, vy: viewTransform.y };
+  document.getElementById('svg-container').style.cursor = 'grabbing';
+});
+window.addEventListener('mousemove', (e) => {
+  if (!panState) return;
+  viewTransform.x = panState.vx + (e.clientX - panState.x);
+  viewTransform.y = panState.vy + (e.clientY - panState.y);
+  applyViewTransform();
+});
+window.addEventListener('mouseup', () => {
+  if (panState) {
+    panState = null;
+    document.getElementById('svg-container').style.cursor = 'grab';
+  }
+});
+
+// ===========================================================
+// AI Generation
+// ===========================================================
 function openAIModal() {
   document.getElementById('ai-modal').classList.add('open');
   const saved = localStorage.getItem('anthropic-api-key') || '';
@@ -788,14 +1384,37 @@ function openAIModal() {
   if (savedModel) document.getElementById('ai-model').value = savedModel;
   document.getElementById('ai-status').innerHTML = '';
 }
-
-function closeAIModal() {
-  document.getElementById('ai-modal').classList.remove('open');
-}
-
+function closeAIModal() { document.getElementById('ai-modal').classList.remove('open'); }
 function setAIStatus(html, cls) {
   const el = document.getElementById('ai-status');
   el.innerHTML = html ? `<div class="status-msg ${cls || 'info'}">${html}</div>` : '';
+}
+
+async function callClaude({ system, user, model, key, maxTokens = 4096 }) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model, max_tokens: maxTokens, system,
+      messages: [{ role: 'user', content: user }]
+    })
+  });
+  if (!resp.ok) {
+    const errText = await resp.text();
+    let msg = `API error ${resp.status}`;
+    try {
+      const j = JSON.parse(errText);
+      if (j.error && j.error.message) msg += `: ${j.error.message}`;
+    } catch {}
+    throw new Error(msg);
+  }
+  const data = await resp.json();
+  return (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
 }
 
 async function generateFromText() {
@@ -837,65 +1456,32 @@ RULES:
 - Node id 0 is reserved for the narrator ("You") — always include it with name="You", type="realization", period="adulthood".
 - All other nodes use sequential integer ids starting at 1.
 - Node desc should describe HOW this influenced the narrator's sexuality or worldview (1-2 sentences).
-- Connections should show the flow of influence — who influenced whom. Most connections will end at the "You" node, but nodes can influence each other (e.g. a parent's church influenced the parent who influenced You).
-- Connection label is an optional short phrase (<5 words) describing the influence (e.g. "taught shame", "modeled openness").
+- Connections show the flow of influence — who influenced whom. Most end at "You", but nodes can influence each other.
+- Connection label is an optional short phrase (<5 words) describing the influence.
 - Place each node in the life period when that influence was most active.
-- Be specific — prefer named, concrete entities ("Grandma Rose", "Catholic school") over vague ones ("family").
-- Aim for 5-15 nodes and 5-20 connections for a rich narrative; fewer is fine for short ones.
+- Be specific — prefer named entities ("Grandma Rose", "Catholic school") over vague ones ("family").
+- Aim for 5-15 nodes and 5-20 connections; fewer is fine for short narratives.
 - Output JSON ONLY. No explanation, no markdown fencing.`;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: model,
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: `Here is the narrative:\n\n${narrative}\n\nReturn the genogram JSON.` }]
-      })
+    const text = await callClaude({
+      system: systemPrompt,
+      user: `Here is the narrative:\n\n${narrative}\n\nReturn the genogram JSON.`,
+      model, key
     });
-
-    if (!resp.ok) {
-      const errText = await resp.text();
-      let msg = `API error ${resp.status}`;
-      try {
-        const j = JSON.parse(errText);
-        if (j.error && j.error.message) msg += `: ${j.error.message}`;
-      } catch {}
-      throw new Error(msg);
-    }
-
-    const data = await resp.json();
-    const textContent = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
-
-    // Extract JSON (strip any accidental code fences)
-    let jsonText = textContent.trim();
+    let jsonText = text.trim();
     const fence = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (fence) jsonText = fence[1].trim();
-
     let parsed;
-    try {
-      parsed = JSON.parse(jsonText);
-    } catch (e) {
-      throw new Error('Claude returned invalid JSON. Try a different model or a clearer narrative.');
-    }
+    try { parsed = JSON.parse(jsonText); }
+    catch { throw new Error('Claude returned invalid JSON. Try again or use a different model.'); }
 
     const newNodes = parsed.nodes || [];
     const newConns = parsed.connections || [];
 
     if (merge) {
-      // Remap incoming ids to avoid collisions, keeping id 0 aligned
       const idMap = { 0: 0 };
-      newNodes.forEach(n => {
-        if (n.id === 0) return;
-        idMap[n.id] = nextNodeId++;
-      });
+      newNodes.forEach(n => { if (n.id !== 0) idMap[n.id] = nextNodeId++; });
       newNodes.forEach(n => {
         if (n.id === 0) return;
         nodes.push({ id: idMap[n.id], name: n.name, type: n.type, period: n.period, desc: n.desc || '' });
@@ -912,30 +1498,352 @@ RULES:
       connections = newConns.map((c, i) => ({
         id: i + 1, from: c.from, to: c.to, nature: c.nature, label: c.label || ''
       }));
-      // Ensure "You" node exists
       if (!nodes.find(n => n.id === 0)) {
-        nodes.unshift({ id: 0, name: 'You', type: 'realization', period: 'adulthood', desc: 'Yourself — the center of this genogram.' });
+        nodes.unshift({ id: 0, name: 'You', type: 'realization', period: 'adulthood',
+                        desc: 'Yourself — the center of this genogram.' });
       }
       nextNodeId = Math.max(...nodes.map(n => n.id), 0) + 1;
       nextConnId = connections.length + 1;
     }
-
+    markDirty();
     refreshAll();
-    setAIStatus(`Generated ${newNodes.length} nodes and ${newConns.length} connections.`, 'info');
-    setTimeout(closeAIModal, 800);
+    setAIStatus(`Generated ${newNodes.length} nodes and ${newConns.length} connections.`, 'success');
+    setTimeout(closeAIModal, 900);
   } catch (err) {
-    setAIStatus(err.message, 'error');
+    setAIStatus(escapeHtml(err.message), 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = 'Generate';
   }
 }
 
-// Close modal when clicking backdrop
 document.getElementById('ai-modal').addEventListener('click', (e) => {
   if (e.target.id === 'ai-modal') closeAIModal();
 });
 
+// ===========================================================
+// Written Statement
+// ===========================================================
+let lastStatement = '';
+
+function openStatementModal() {
+  document.getElementById('statement-modal').classList.add('open');
+  document.getElementById('statement-status').innerHTML = '';
+}
+function closeStatementModal() {
+  document.getElementById('statement-modal').classList.remove('open');
+}
+function setStatementStatus(html, cls) {
+  const el = document.getElementById('statement-status');
+  el.innerHTML = html ? `<div class="status-msg ${cls || 'info'}">${html}</div>` : '';
+}
+
+async function generateStatement() {
+  const key = localStorage.getItem('anthropic-api-key') || '';
+  if (!key) {
+    setStatementStatus('No Anthropic API key found. Open <strong>Generate from Text</strong> first to enter one.', 'error');
+    return;
+  }
+  if (nodes.length <= 1) {
+    setStatementStatus('Add some influences first — the graph is empty.', 'error');
+    return;
+  }
+  const model = localStorage.getItem('anthropic-model') || 'claude-sonnet-4-5';
+  const btn = document.getElementById('statement-gen-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Writing...';
+  setStatementStatus('Asking Claude to write your statement...', 'info');
+  document.getElementById('statement-output').textContent = '';
+
+  const sys = `You write reflective first-person essays based on "influence genograms" — visual maps of the people, institutions, and cultural forces that shaped someone's sexuality and worldview.
+
+You will receive JSON with nodes (influences) and connections (who influenced whom, and how). Write a single 3-5 paragraph reflective essay (~300-500 words) in first person ("I", "my") that:
+
+1. Briefly introduces the periods of life covered and the kinds of influences present.
+2. Walks through major influences in roughly chronological order, grouping related ones (e.g. all childhood family, then early religious or institutional forces, then partners and self-realizations).
+3. Names the patterns visible in the connections: where influences were supportive vs restrictive, where they reinforced each other, where transformative shifts happened.
+4. Closes with what the diagram suggests about the writer's worldview today.
+
+CONSTRAINTS:
+- First person only. Do not use "you" or "the narrator".
+- Do NOT invent facts not present in the JSON. If something is unclear, speak generally.
+- No markdown headings or bullet lists — flowing prose only.
+- No introductory throat-clearing ("Here is your essay..."). Start with the essay itself.
+- Keep it under 500 words.`;
+
+  const user = `Here is the genogram JSON:\n\n${JSON.stringify({ nodes, connections }, null, 2)}\n\nWrite the reflective essay.`;
+
+  try {
+    const text = await callClaude({ system: sys, user, model, key, maxTokens: 2000 });
+    lastStatement = text.trim();
+    document.getElementById('statement-output').textContent = lastStatement;
+    document.getElementById('statement-copy-btn').style.display = '';
+    document.getElementById('statement-dl-txt-btn').style.display = '';
+    document.getElementById('statement-dl-md-btn').style.display = '';
+    setStatementStatus('Done. You can regenerate for a different take.', 'success');
+    btn.innerHTML = 'Regenerate';
+  } catch (err) {
+    setStatementStatus(escapeHtml(err.message), 'error');
+    btn.innerHTML = 'Generate';
+  } finally {
+    btn.disabled = false;
+  }
+}
+function copyStatement() {
+  navigator.clipboard.writeText(lastStatement).then(
+    () => setStatementStatus('Copied to clipboard.', 'success'),
+    () => setStatementStatus('Copy failed.', 'error')
+  );
+}
+function downloadStatement(fmt) {
+  const ext = fmt === 'md' ? 'md' : 'txt';
+  const mime = fmt === 'md' ? 'text/markdown' : 'text/plain';
+  const blob = new Blob([lastStatement], { type: mime + ';charset=utf-8' });
+  const a = document.createElement('a');
+  a.download = `genogram-statement${activeProfile ? '-' + activeProfile : ''}.${ext}`;
+  a.href = URL.createObjectURL(blob);
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+document.getElementById('statement-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'statement-modal') closeStatementModal();
+});
+
+// ===========================================================
+// Profiles (encrypted localStorage)
+// ===========================================================
+const PROFILES_KEY = 'genogram-profiles';
+
+function getProfiles() {
+  try { return JSON.parse(localStorage.getItem(PROFILES_KEY) || '{}'); }
+  catch { return {}; }
+}
+function saveProfiles(p) {
+  localStorage.setItem(PROFILES_KEY, JSON.stringify(p));
+}
+function b64encode(buf) {
+  const bytes = new Uint8Array(buf);
+  let str = '';
+  for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+  return btoa(str);
+}
+function b64decode(s) {
+  const bin = atob(s);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+async function deriveKey(password, salt) {
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey(
+    'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false, ['encrypt', 'decrypt']);
+}
+async function encryptData(plainText, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(password, salt);
+  const enc = new TextEncoder();
+  const ct = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv }, key, enc.encode(plainText));
+  return { encrypted: b64encode(ct), salt: b64encode(salt), iv: b64encode(iv), key };
+}
+async function decryptData(profile, password) {
+  const salt = new Uint8Array(b64decode(profile.salt));
+  const iv = new Uint8Array(b64decode(profile.iv));
+  const ct = b64decode(profile.encrypted);
+  const key = await deriveKey(password, salt);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+  return { text: new TextDecoder().decode(pt), key };
+}
+
+function openProfileModal() {
+  document.getElementById('profile-modal').classList.add('open');
+  renderProfileList();
+  document.getElementById('profile-status').innerHTML = '';
+  document.getElementById('new-profile-name').value = '';
+  document.getElementById('new-profile-pw').value = '';
+  document.getElementById('new-profile-pw2').value = '';
+}
+function closeProfileModal() { document.getElementById('profile-modal').classList.remove('open'); }
+function setProfileStatus(html, cls) {
+  document.getElementById('profile-status').innerHTML =
+    html ? `<div class="status-msg ${cls || 'info'}">${html}</div>` : '';
+}
+function renderProfileList() {
+  const profiles = getProfiles();
+  const names = Object.keys(profiles).sort();
+  const list = document.getElementById('profile-list');
+  if (names.length === 0) {
+    list.innerHTML = '<div class="hint">No saved profiles yet.</div>';
+    return;
+  }
+  list.innerHTML = names.map(name => {
+    const isActive = name === activeProfile;
+    return `<div class="profile-row${isActive ? ' active' : ''}">
+      <div>
+        <div class="profile-row-name">${escapeHtml(name)}</div>
+        ${isActive ? '<div class="hint" style="margin:0">currently loaded</div>' : ''}
+      </div>
+      <div class="profile-row-actions">
+        ${isActive
+          ? `<button class="btn btn-primary btn-sm" onclick="saveActiveProfile()">Save</button>`
+          : `<button class="btn btn-primary btn-sm" onclick="promptUnlock('${escapeJs(name)}')">Open</button>`}
+        <button class="btn btn-danger btn-sm" onclick="deleteProfile('${escapeJs(name)}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function escapeJs(s) { return String(s).replace(/['"\\]/g, '\\$&'); }
+
+async function createProfile() {
+  const name = document.getElementById('new-profile-name').value.trim();
+  const pw = document.getElementById('new-profile-pw').value;
+  const pw2 = document.getElementById('new-profile-pw2').value;
+  if (!name) return setProfileStatus('Please enter a profile name.', 'error');
+  if (pw.length < 4) return setProfileStatus('Password must be at least 4 characters.', 'error');
+  if (pw !== pw2) return setProfileStatus('Passwords do not match.', 'error');
+  const profiles = getProfiles();
+  if (profiles[name]) return setProfileStatus('A profile with that name already exists.', 'error');
+
+  // Save current state as the new profile
+  const data = JSON.stringify({ nodes, connections, nextNodeId, nextConnId });
+  try {
+    const enc = await encryptData(data, pw);
+    profiles[name] = { encrypted: enc.encrypted, salt: enc.salt, iv: enc.iv };
+    saveProfiles(profiles);
+    activeProfile = name;
+    activeProfileKey = enc.key;
+    dirty = false;
+    updateActiveProfileLabel();
+    renderProfileList();
+    setProfileStatus(`Created profile <strong>${escapeHtml(name)}</strong>. It is now active.`, 'success');
+  } catch (err) {
+    setProfileStatus('Failed to create profile: ' + escapeHtml(err.message), 'error');
+  }
+}
+
+let pendingUnlockName = null;
+function promptUnlock(name) {
+  pendingUnlockName = name;
+  document.getElementById('unlock-modal').classList.add('open');
+  document.getElementById('unlock-prompt').textContent = `Enter password for "${name}".`;
+  document.getElementById('unlock-pw').value = '';
+  document.getElementById('unlock-status').innerHTML = '';
+  setTimeout(() => document.getElementById('unlock-pw').focus(), 50);
+}
+function closeUnlockModal() {
+  document.getElementById('unlock-modal').classList.remove('open');
+  pendingUnlockName = null;
+}
+async function confirmUnlock() {
+  const name = pendingUnlockName;
+  const pw = document.getElementById('unlock-pw').value;
+  if (!name) return;
+  const profiles = getProfiles();
+  const p = profiles[name];
+  if (!p) return setUnlockStatus('Profile not found.', 'error');
+  setUnlockStatus('Decrypting...', 'info');
+  try {
+    const { text, key } = await decryptData(p, pw);
+    const data = JSON.parse(text);
+    loadGraphData(data);
+    activeProfile = name;
+    activeProfileKey = key;
+    dirty = false;
+    updateActiveProfileLabel();
+    renderProfileList();
+    closeUnlockModal();
+    setProfileStatus(`Loaded profile <strong>${escapeHtml(name)}</strong>.`, 'success');
+  } catch (err) {
+    setUnlockStatus('Wrong password or corrupted profile.', 'error');
+  }
+}
+function setUnlockStatus(html, cls) {
+  document.getElementById('unlock-status').innerHTML =
+    html ? `<div class="status-msg ${cls || 'info'}">${html}</div>` : '';
+}
+
+async function saveActiveProfile() {
+  if (!activeProfile) return setProfileStatus('No active profile to save.', 'error');
+  const profiles = getProfiles();
+  if (!profiles[activeProfile]) return setProfileStatus('Active profile no longer exists.', 'error');
+  // Re-encrypt with the existing salt/iv? Better: generate new IV per save.
+  // We need the password to derive the key. We already have activeProfileKey from unlock/create — reuse it.
+  if (!activeProfileKey) return setProfileStatus('Please re-open this profile to unlock its key first.', 'error');
+  try {
+    const data = JSON.stringify({ nodes, connections, nextNodeId, nextConnId });
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const enc = new TextEncoder();
+    const ct = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv }, activeProfileKey, enc.encode(data));
+    profiles[activeProfile].encrypted = b64encode(ct);
+    profiles[activeProfile].iv = b64encode(iv);
+    saveProfiles(profiles);
+    dirty = false;
+    updateActiveProfileLabel();
+    setProfileStatus(`Saved <strong>${escapeHtml(activeProfile)}</strong>.`, 'success');
+  } catch (err) {
+    setProfileStatus('Save failed: ' + escapeHtml(err.message), 'error');
+  }
+}
+
+async function deleteProfile(name) {
+  if (!confirm(`Delete profile "${name}"? This cannot be undone.`)) return;
+  // Require password confirmation for safety
+  const pw = prompt(`Enter the password for "${name}" to confirm deletion:`);
+  if (pw === null) return;
+  const profiles = getProfiles();
+  if (!profiles[name]) return;
+  try {
+    await decryptData(profiles[name], pw); // throws on wrong password
+    delete profiles[name];
+    saveProfiles(profiles);
+    if (activeProfile === name) {
+      activeProfile = null;
+      activeProfileKey = null;
+      updateActiveProfileLabel();
+    }
+    renderProfileList();
+    setProfileStatus(`Deleted <strong>${escapeHtml(name)}</strong>.`, 'success');
+  } catch (err) {
+    setProfileStatus('Wrong password — profile not deleted.', 'error');
+  }
+}
+
+function updateActiveProfileLabel() {
+  const el = document.getElementById('active-profile');
+  if (activeProfile) {
+    el.innerHTML = `Profile: <strong>${escapeHtml(activeProfile)}</strong>${dirty ? ' <em style="color:#c0392b">(unsaved changes)</em>' : ''} — <a href="#" onclick="openProfileModal();return false;">manage</a>`;
+  } else {
+    el.innerHTML = `No profile loaded — <a href="#" onclick="openProfileModal();return false;">open or create one</a>`;
+  }
+}
+
+document.getElementById('profile-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'profile-modal') closeProfileModal();
+});
+document.getElementById('unlock-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'unlock-modal') closeUnlockModal();
+});
+
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', (e) => {
+  if (dirty && activeProfile) {
+    e.preventDefault();
+    e.returnValue = 'You have unsaved changes to your profile.';
+    return e.returnValue;
+  }
+});
+
+// ===========================================================
+// Init
+// ===========================================================
+updateActiveProfileLabel();
 refreshAll();
 </script>
 </body>
